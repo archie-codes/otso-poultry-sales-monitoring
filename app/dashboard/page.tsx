@@ -96,7 +96,7 @@ export default async function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <CardSummary
           title="Total Sales Today"
-          amount="₱120,000"
+          amount="₱130,000"
           icon={<ArrowUpRight className="w-5 h-5" />}
           trend="+12.5%"
           gradient="from-blue-500 to-cyan-400"
