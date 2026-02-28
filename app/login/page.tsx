@@ -47,15 +47,24 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F5F5F5] dark:bg-gray-950 relative overflow-hidden px-4 py-8 sm:px-6 lg:px-8 transition-colors duration-300">
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-400/30 dark:bg-blue-600/20 rounded-full mix-blend-multiply dark:mix-blend-lighten filter blur-3xl opacity-70 animate-pulse" />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] dark:bg-gray-950 relative overflow-hidden px-4 py-8 sm:px-6 lg:px-8 transition-colors duration-300">
+      {/* 1. The Premium Dot Pattern Overlay */}
+      <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] bg-size-[24px_24px] opacity-60 pointer-events-none" />
+
+      {/* 2. The Animated Light Orbs */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none flex justify-center items-center">
+        {/* Farm Morning Sun (Amber) */}
+        <div className="absolute top-[-10%] left-[-10%] w-120 h-120 bg-amber-400/30 dark:bg-amber-600/20 rounded-full mix-blend-multiply dark:mix-blend-lighten filter blur-[100px] animate-pulse" />
+
+        {/* Nature/Growth (Emerald) */}
         <div
-          className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-green-400/30 dark:bg-green-600/20 rounded-full mix-blend-multiply dark:mix-blend-lighten filter blur-3xl opacity-70 animate-pulse"
+          className="absolute top-[20%] right-[-10%] w-100 h-100 bg-emerald-400/30 dark:bg-emerald-600/20 rounded-full mix-blend-multiply dark:mix-blend-lighten filter blur-[100px] animate-pulse"
           style={{ animationDelay: "2s" }}
         />
+
+        {/* Tech/Sky (Blue) */}
         <div
-          className="absolute bottom-[-20%] left-[20%] w-96 h-96 bg-emerald-400/30 dark:bg-emerald-600/20 rounded-full mix-blend-multiply dark:mix-blend-lighten filter blur-3xl opacity-70 animate-pulse"
+          className="absolute bottom-[-10%] left-[10%] w-140 h-140 bg-blue-400/30 dark:bg-blue-600/20 rounded-full mix-blend-multiply dark:mix-blend-lighten filter blur-[100px] animate-pulse"
           style={{ animationDelay: "4s" }}
         />
       </div>
