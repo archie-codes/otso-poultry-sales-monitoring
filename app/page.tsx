@@ -1,9 +1,24 @@
-import CardSummary from "@/components/CardSummary";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import LineChart from "@/components/LineChart";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../lib/auth";
+import { redirect } from "next/navigation";
+import CardSummary from "../components/CardSummary";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import LineChart from "../components/LineChart";
 import { ArrowUpRight, ArrowDownRight, Wallet, DollarSign } from "lucide-react";
 
-export default function Dashboard() {
+export default async function Dashboard() {
+  const session = await getServerSession(authOptions);
+
+  // If the user is staff, kick them to Daily Monitoring
+  if ((session?.user as any)?.role === "staff") {
+    redirect("/production/monitoring");
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div>
@@ -11,11 +26,11 @@ export default function Dashboard() {
           Dashboard Overview
         </h1>
         <p className="text-muted-foreground mt-1">
-          Welcome back. Here's what's happening at Otso Poultry Farm today.
+          Welcome back. Here&apos;s what&apos;s happening at Otso Poultry Farm
+          today.
         </p>
       </div>
 
-      {/* Summary Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <CardSummary
           title="Total Sales Today"
@@ -47,7 +62,6 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Charts Section */}
       <div className="grid grid-cols-1 gap-6">
         <Card className="col-span-1 border-border/50 bg-background/50 backdrop-blur-xl">
           <CardHeader>
