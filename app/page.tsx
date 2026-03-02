@@ -7,7 +7,6 @@ import { eq, asc } from "drizzle-orm";
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage(props: {
-  // Safely handle searchParams for both Next.js 14 and 15
   searchParams:
     | Promise<{ province?: string; farm?: string }>
     | { province?: string; farm?: string };
@@ -15,21 +14,35 @@ export default async function DashboardPage(props: {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
-  // Await params to prevent Next.js dynamic routing errors
   const searchParams = await props.searchParams;
   const selectedProvince = searchParams?.province;
   const selectedFarm = searchParams?.farm;
 
-  // 1. Fetch Filter Options
+  // 1. Fetch Filter Options & Infrastructure Base
   const allFarms = await db.select().from(farms);
   const uniqueProvinces = Array.from(
     new Set(allFarms.map((f) => f.province)),
   ).filter(Boolean);
 
+  const dropdownFarms = selectedProvince
+    ? allFarms.filter((f) => f.province === selectedProvince).map((f) => f.name)
+    : allFarms.map((f) => f.name);
+
+  // Fetch all buildings to calculate active vs empty status
+  const allBuildings = await db
+    .select({
+      id: buildings.id,
+      farmName: farms.name,
+      province: farms.province,
+    })
+    .from(buildings)
+    .innerJoin(farms, eq(buildings.farmId, farms.id));
+
   // 2. Fetch Active Loads
   const activeLoads = await db
     .select({
       id: loads.id,
+      buildingId: loads.buildingId,
       quantity: loads.actualQuantityLoad,
       initialCapital: loads.initialCapital,
       loadDate: loads.loadDate,
@@ -52,7 +65,19 @@ export default async function DashboardPage(props: {
     return provinceMatch && farmMatch;
   });
 
-  // 4. Calculate Advanced Metrics using FILTERED loads
+  const filteredBuildings = allBuildings.filter((b) => {
+    const provinceMatch = !selectedProvince || b.province === selectedProvince;
+    const farmMatch = !selectedFarm || b.farmName === selectedFarm;
+    return provinceMatch && farmMatch;
+  });
+
+  const filteredFarms = allFarms.filter((f) => {
+    const provinceMatch = !selectedProvince || f.province === selectedProvince;
+    const farmMatch = !selectedFarm || f.name === selectedFarm;
+    return provinceMatch && farmMatch;
+  });
+
+  // 4. Calculate Advanced Metrics
   const totalBirds = filteredLoads.reduce(
     (sum, l) => sum + Number(l.quantity),
     0,
@@ -65,9 +90,14 @@ export default async function DashboardPage(props: {
     (l) => !l.initialCapital || Number(l.initialCapital) === 0,
   ).length;
 
-  const capacityUtilization = 0; // Hardcoded until capacity is added to DB
+  // --- NEW: INFRASTRUCTURE METRICS ---
+  const totalFarmsCount = filteredFarms.length;
+  // A building is active if its ID appears in the filtered active loads
+  const activeBuildingIds = new Set(filteredLoads.map((l) => l.buildingId));
+  const activeBuildingsCount = activeBuildingIds.size;
+  const emptyBuildingsCount = filteredBuildings.length - activeBuildingsCount;
 
-  // 5. Prepare Chart Data (Aggregated by Farm)
+  // 5. Prepare Chart Data
   const farmChartData = filteredLoads.reduce((acc: any, curr) => {
     const existing = acc.find((item: any) => item.name === curr.farmName);
     if (existing) {
@@ -93,7 +123,7 @@ export default async function DashboardPage(props: {
       imageUrl={(session.user as any)?.imageUrl}
       loads={filteredLoads}
       provinces={uniqueProvinces}
-      farms={allFarms.map((f) => f.name)}
+      farms={dropdownFarms}
       chartData={farmChartData}
       upcomingHarvests={upcomingHarvests}
       metrics={{
@@ -101,7 +131,9 @@ export default async function DashboardPage(props: {
         totalCapital,
         pendingCapitalCount,
         activeLoadsCount: filteredLoads.length,
-        capacityUtilization,
+        totalFarmsCount,
+        activeBuildingsCount,
+        emptyBuildingsCount,
       }}
     />
   );

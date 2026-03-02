@@ -80,8 +80,10 @@ export default function AddLoadModal({
   const [openChickType, setOpenChickType] = useState(false);
 
   const [loadDate, setLoadDate] = useState<Date | undefined>(new Date());
+
+  // --- FIXED: DEFAULT HARVEST IS NOW 4 MONTHS AHEAD ---
   const [harvestDate, setHarvestDate] = useState<Date | undefined>(
-    addMonths(new Date(), 1.5),
+    addMonths(new Date(), 4),
   );
 
   useEffect(() => {
@@ -100,7 +102,8 @@ export default function AddLoadModal({
 
   function handleLoadDateChange(date: Date | undefined) {
     setLoadDate(date);
-    if (date) setHarvestDate(addMonths(date, 1.5));
+    // --- FIXED: IF THEY CHANGE LOAD DATE, AUTO-SHIFT HARVEST TO 4 MONTHS LATER ---
+    if (date) setHarvestDate(addMonths(date, 4));
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -289,7 +292,10 @@ export default function AddLoadModal({
 
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      Est Harvest
+                      Est Harvest{" "}
+                      <span className="text-red-500 lowercase tracking-normal text-[10px] ml-1 opacity-80">
+                        (4 Months Estimated)
+                      </span>
                     </label>
                     <Popover>
                       <PopoverTrigger asChild>

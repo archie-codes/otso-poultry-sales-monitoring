@@ -1,0 +1,104 @@
+"use client";
+
+import { useState } from "react";
+import { Trash2, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { deleteDailyRecord } from "./actions";
+import { toast } from "sonner";
+import EditDailyRecordModal from "./EditDailyRecordModal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"; // Added Tooltip imports
+
+export default function RecordActions({ record }: { record: any }) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function onDelete() {
+    setIsDeleting(true);
+    const result = await deleteDailyRecord(record.id);
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success("Record deleted");
+    }
+    setIsDeleting(false);
+  }
+
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {/* EDIT MODAL 
+        (This component already has its internal TooltipProvider) 
+      */}
+      <EditDailyRecordModal record={record} />
+
+      {/* DELETE WITH CONFIRMATION & TOOLTIP */}
+      <TooltipProvider>
+        <Tooltip delayDuration={300}>
+          <AlertDialog>
+            <TooltipTrigger asChild>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-slate-300 hover:text-red-500 transition-colors"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+            </TooltipTrigger>
+
+            <TooltipContent side="top">
+              <p className="text-[10px] font-bold uppercase tracking-widest">
+                Delete Record
+              </p>
+            </TooltipContent>
+
+            <AlertDialogContent className="rounded-3xl border-border">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-xl font-black">
+                  Are you absolutely sure?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-sm font-medium">
+                  This will permanently delete the daily log for{" "}
+                  <span className="text-foreground font-bold">
+                    {record.buildingName}
+                  </span>
+                  . This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="mt-4">
+                <AlertDialogCancel className="rounded-xl font-bold">
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={onDelete}
+                  className="bg-red-500 hover:bg-blaxck-600 rounded-xl font-bold text-white shadow-md transition-all active:scale-95"
+                >
+                  Delete Record
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}

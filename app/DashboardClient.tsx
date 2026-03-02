@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Wallet,
   Warehouse,
@@ -9,6 +10,8 @@ import {
   AlertCircle,
   CalendarCheck,
   MapPin,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import {
   BarChart,
@@ -24,6 +27,20 @@ import Image from "next/image";
 import henIcon from "@/public/hen.png";
 import { cn } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 // --- Custom Hen Component ---
 const HenIcon = ({ className }: { className?: string }) => (
@@ -67,23 +84,25 @@ export default function DashboardClient({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // --- THE FILTER LOGIC FIX ---
+  // --- Combobox States ---
+  const [openProvince, setOpenProvince] = useState(false);
+  const [openFarm, setOpenFarm] = useState(false);
+
+  const selectedProvince = searchParams.get("province") || "all";
+  const selectedFarm = searchParams.get("farm") || "all";
+
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
 
     if (value === "all") {
       params.delete(key);
+      if (key === "province") params.delete("farm");
     } else {
       params.set(key, value);
-      // Smart feature: If they change the province, reset the farm filter
-      // so they don't get stuck with "Pangasinan" + "Bulacan Farm" = 0 results
-      if (key === "province") {
-        params.delete("farm");
-      }
+      if (key === "province") params.delete("farm");
     }
 
-    router.replace(`/?${params.toString()}`, { scroll: false });
-    router.refresh(); // <-- THIS FORCES NEXT.JS TO UPDATE THE DATA!
+    router.push(`/?${params.toString()}`, { scroll: false });
   };
 
   const getInitials = (name: string) => {
@@ -101,7 +120,7 @@ export default function DashboardClient({
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto pb-12 px-4 sm:px-6 lg:px-8 pt-4 sm:pt-8">
-      {/* 1. WELCOME BANNER (Cleaned up!) */}
+      {/* 1. WELCOME BANNER */}
       <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-blue-600 to-indigo-800 p-8 sm:p-10 shadow-lg border border-blue-500/30">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-6">
@@ -135,73 +154,184 @@ export default function DashboardClient({
       </div>
 
       {/* 2. DEDICATED FILTER BAR */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-card border border-border/50 p-4 rounded-2xl shadow-sm">
-        <div className="flex items-center text-muted-foreground mr-2 shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-card border border-border/50 p-4 rounded-3xl shadow-sm">
+        <div className="flex items-center text-muted-foreground mr-2 shrink-0 px-2">
           <Filter className="w-5 h-5 mr-2 text-blue-500" />
           <span className="text-xs font-black uppercase tracking-widest">
             Filters
           </span>
         </div>
 
-        <div className="flex-1 flex flex-col sm:flex-row gap-3">
-          {/* Province Filter */}
-          <div className="flex-1 flex items-center bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-border overflow-hidden focus-within:ring-2 ring-blue-500/50 transition-shadow">
-            <div className="pl-4 pr-2 text-slate-400">
-              <MapPin className="w-4 h-4" />
-            </div>
-            <select
-              onChange={(e) => updateFilter("province", e.target.value)}
-              value={searchParams.get("province") || "all"}
-              className="w-full bg-transparent text-sm font-bold border-none focus:ring-0 cursor-pointer py-3 pr-4 outline-none"
-            >
-              <option value="all">All Regions</option>
-              {provinces.map((p: string) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+        <div className="flex-1 flex flex-col sm:flex-row gap-4">
+          {/* --- COMBOBOX: PROVINCE --- */}
+          <div className="flex-1 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 focus-within:ring-2 ring-blue-500/50 transition-shadow">
+            <Popover open={openProvince} onOpenChange={setOpenProvince}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  role="combobox"
+                  aria-expanded={openProvince}
+                  className="w-full justify-between h-14 hover:bg-transparent hover:text-foreground rounded-2xl"
+                >
+                  <div className="flex items-center text-slate-500 dark:text-slate-400">
+                    <MapPin className="w-4 h-4 mr-3 shrink-0" />
+                    <span className="font-bold text-foreground uppercase tracking-wider truncate">
+                      {selectedProvince === "all"
+                        ? "ALL REGIONS"
+                        : selectedProvince}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl border-border shadow-xl">
+                <Command>
+                  <CommandInput placeholder="Search region..." />
+                  <CommandList className="max-h-[250px] custom-scrollbar">
+                    <CommandEmpty>No region found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="all"
+                        onSelect={() => {
+                          updateFilter("province", "all");
+                          setOpenProvince(false);
+                        }}
+                        className="font-bold uppercase tracking-wider cursor-pointer py-3"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedProvince === "all"
+                              ? "opacity-100"
+                              : "opacity-0",
+                          )}
+                        />
+                        ALL REGIONS
+                      </CommandItem>
+                      {provinces.map((p: string) => (
+                        <CommandItem
+                          key={p}
+                          value={p}
+                          onSelect={() => {
+                            updateFilter("province", p);
+                            setOpenProvince(false);
+                          }}
+                          className="font-bold uppercase tracking-wider cursor-pointer py-3"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedProvince === p
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          {p}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
-          {/* Farm Filter */}
-          <div className="flex-1 flex items-center bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-border overflow-hidden focus-within:ring-2 ring-blue-500/50 transition-shadow">
-            <div className="pl-4 pr-2 text-slate-400">
-              <Warehouse className="w-4 h-4" />
-            </div>
-            <select
-              onChange={(e) => updateFilter("farm", e.target.value)}
-              value={searchParams.get("farm") || "all"}
-              className="w-full bg-transparent text-sm font-bold border-none focus:ring-0 cursor-pointer py-3 pr-4 outline-none"
-            >
-              <option value="all">All Farms</option>
-              {farms.map((f: string) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
+          {/* --- COMBOBOX: FARM --- */}
+          <div className="flex-1 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 focus-within:ring-2 ring-blue-500/50 transition-shadow">
+            <Popover open={openFarm} onOpenChange={setOpenFarm}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  role="combobox"
+                  aria-expanded={openFarm}
+                  className="w-full justify-between h-14 hover:bg-transparent hover:text-foreground rounded-2xl"
+                >
+                  <div className="flex items-center text-slate-500 dark:text-slate-400">
+                    <Warehouse className="w-4 h-4 mr-3 shrink-0" />
+                    <span className="font-bold text-foreground uppercase tracking-wider truncate">
+                      {selectedFarm === "all" ? "ALL FARMS" : selectedFarm}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl border-border shadow-xl">
+                <Command>
+                  <CommandInput placeholder="Search farm..." />
+                  <CommandList className="max-h-[250px] custom-scrollbar">
+                    <CommandEmpty>No farm found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="all"
+                        onSelect={() => {
+                          updateFilter("farm", "all");
+                          setOpenFarm(false);
+                        }}
+                        className="font-bold uppercase tracking-wider cursor-pointer py-3"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedFarm === "all"
+                              ? "opacity-100"
+                              : "opacity-0",
+                          )}
+                        />
+                        ALL FARMS
+                      </CommandItem>
+                      {farms.map((f: string) => (
+                        <CommandItem
+                          key={f}
+                          value={f}
+                          onSelect={() => {
+                            updateFilter("farm", f);
+                            setOpenFarm(false);
+                          }}
+                          className="font-bold uppercase tracking-wider cursor-pointer py-3"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedFarm === f ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                          {f}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </div>
 
       {/* 3. KPI BENTO BOXES */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <div className="bg-card border border-border/50 p-6 rounded-3xl shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
+        {/* KPI 1 */}
+        <div className="bg-card border border-border/50 p-6 rounded-3xl shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden flex flex-col justify-between">
           <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full -mr-10 -mt-10 blur-2xl group-hover:bg-blue-500/10 transition-colors"></div>
           <div className="flex justify-between items-start mb-4 relative z-10">
             <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl group-hover:scale-110 transition-transform">
               <HenIcon className="w-6 h-6" />
             </div>
           </div>
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 relative z-10">
-            Total Active Birds
-          </p>
-          <h2 className="text-3xl font-black text-foreground relative z-10">
-            {metrics.totalBirds.toLocaleString()}
-          </h2>
+          <div className="min-w-0 w-full relative z-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 truncate">
+              Total Active Birds
+            </p>
+            <h2
+              className="text-2xl xl:text-3xl font-black text-foreground truncate tracking-tighter"
+              title={metrics.totalBirds.toLocaleString()}
+            >
+              {metrics.totalBirds.toLocaleString()}
+            </h2>
+          </div>
         </div>
 
-        <div className="bg-card border border-border/50 p-6 rounded-3xl shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
+        {/* KPI 2 */}
+        <div className="bg-card border border-border/50 p-6 rounded-3xl shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden flex flex-col justify-between">
           <div
             className={cn(
               "absolute top-0 right-0 w-24 h-24 rounded-full -mr-10 -mt-10 blur-2xl transition-colors",
@@ -215,61 +345,89 @@ export default function DashboardClient({
               <Wallet className="w-6 h-6" />
             </div>
             {metrics.pendingCapitalCount > 0 && (
-              <span className="flex items-center gap-1 text-[10px] font-black text-amber-600 bg-amber-50 dark:bg-amber-950/50 px-2 py-1 rounded-full animate-pulse border border-amber-200 dark:border-amber-900">
+              <span className="flex items-center gap-1 text-[10px] font-black text-amber-600 bg-amber-50 dark:bg-amber-950/50 px-2 py-1 rounded-full animate-pulse border border-amber-200 dark:border-amber-900 shrink-0 ml-2">
                 <AlertCircle className="w-3 h-3" />{" "}
                 {metrics.pendingCapitalCount} PENDING
               </span>
             )}
           </div>
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 relative z-10">
-            Active Capital (Chicks)
-          </p>
-          <h2 className="text-3xl font-black text-foreground relative z-10">
-            ₱
-            {metrics.totalCapital.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-            })}
-          </h2>
+          <div className="min-w-0 w-full relative z-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 truncate">
+              Active Capital (Chicks)
+            </p>
+            <h2
+              className="text-2xl xl:text-3xl font-black text-foreground truncate tracking-tighter"
+              title={`₱${metrics.totalCapital.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            >
+              ₱
+              {metrics.totalCapital.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
+            </h2>
+          </div>
         </div>
 
-        <div className="bg-card border border-border/50 p-6 rounded-3xl shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
+        {/* KPI 3 */}
+        <div className="bg-card border border-border/50 p-6 rounded-3xl shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden flex flex-col justify-between">
           <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full -mr-10 -mt-10 blur-2xl group-hover:bg-amber-500/10 transition-colors"></div>
           <div className="flex justify-between items-start mb-4 relative z-10">
             <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform">
               <TrendingUp className="w-6 h-6" />
             </div>
           </div>
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 relative z-10">
-            Active Loads
-          </p>
-          <div className="flex items-baseline gap-2 relative z-10">
-            <h2 className="text-3xl font-black text-foreground">
-              {metrics.activeLoadsCount}
-            </h2>
-            <span className="text-sm font-semibold text-muted-foreground">
-              Batches
-            </span>
+          <div className="min-w-0 w-full relative z-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 truncate">
+              Active Loads
+            </p>
+            <div className="flex items-baseline gap-2 truncate">
+              <h2 className="text-2xl xl:text-3xl font-black text-foreground tracking-tighter">
+                {metrics.activeLoadsCount}
+              </h2>
+              <span className="text-sm font-semibold text-muted-foreground">
+                Batches
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="bg-card border border-border/50 p-6 rounded-3xl shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
+        {/* KPI 4: Infrastructure Status */}
+        <div className="bg-card border border-border/50 p-6 rounded-3xl shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden flex flex-col justify-between">
           <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full -mr-10 -mt-10 blur-2xl group-hover:bg-purple-500/10 transition-colors"></div>
           <div className="flex justify-between items-start mb-4 relative z-10">
             <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform">
               <Warehouse className="w-6 h-6" />
             </div>
           </div>
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1 relative z-10">
-            Capacity Utilization
-          </p>
-          <h2 className="text-3xl font-black text-foreground relative z-10">
-            {metrics.capacityUtilization}%
-          </h2>
-          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-3 overflow-hidden relative z-10">
-            <div
-              className="bg-purple-500 h-1.5 rounded-full"
-              style={{ width: `${metrics.capacityUtilization}%` }}
-            />
+          <div className="min-w-0 w-full relative z-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 truncate">
+              Infrastructure Status
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-col">
+                <span className="text-2xl xl:text-3xl font-black text-foreground tracking-tighter">
+                  {metrics.totalFarmsCount}
+                </span>
+                <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-widest">
+                  Farms
+                </span>
+              </div>
+              <div className="flex flex-col border-l border-border/50 pl-2">
+                <span className="text-2xl xl:text-3xl font-black text-emerald-500 dark:text-emerald-400 tracking-tighter">
+                  {metrics.activeBuildingsCount}
+                </span>
+                <span className="text-[9px] uppercase font-bold text-emerald-600/70 dark:text-emerald-400/70 tracking-widest">
+                  Active
+                </span>
+              </div>
+              <div className="flex flex-col border-l border-border/50 pl-2">
+                <span className="text-2xl xl:text-3xl font-black text-slate-400 dark:text-slate-500 tracking-tighter">
+                  {metrics.emptyBuildingsCount}
+                </span>
+                <span className="text-[9px] uppercase font-bold text-slate-400 tracking-widest">
+                  Empty
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -347,29 +505,57 @@ export default function DashboardClient({
           <div className="grow space-y-4 overflow-y-auto custom-scrollbar pr-2">
             {upcomingHarvests.length > 0 ? (
               upcomingHarvests.map((load: any) => {
+                // --- FIXED MATH: Calculate exactly Harvest Date - Load Date ---
                 const harvestDateObj = new Date(load.harvestDate);
-                const diffTime =
-                  harvestDateObj.getTime() - new Date().getTime();
-                const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                const isUrgent = daysUntil <= 3;
+                const loadDateObj = new Date(load.loadDate);
+
+                // Using UTC prevents Daylight Savings Time offsets from returning fractions (like 121.9 days)
+                const hDate = Date.UTC(
+                  harvestDateObj.getFullYear(),
+                  harvestDateObj.getMonth(),
+                  harvestDateObj.getDate(),
+                );
+                const lDate = Date.UTC(
+                  loadDateObj.getFullYear(),
+                  loadDateObj.getMonth(),
+                  loadDateObj.getDate(),
+                );
+                const tDate = Date.UTC(
+                  new Date().getFullYear(),
+                  new Date().getMonth(),
+                  new Date().getDate(),
+                );
+
+                // Total cycle length (e.g. March 3 to July 3 = 122 days)
+                const totalDaysCycle = Math.round(
+                  (hDate - lDate) / (1000 * 60 * 60 * 24),
+                );
+
+                // We keep the countdown logic strictly for triggering the Amber "Urgent" color
+                const daysLeft = Math.round(
+                  (hDate - tDate) / (1000 * 60 * 60 * 24),
+                );
+                const isUrgent = daysLeft <= 3 && daysLeft >= 0;
 
                 return (
                   <div
                     key={load.id}
                     className="group bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-500 transition-colors flex items-center justify-between"
                   >
-                    <div>
-                      <p className="font-bold text-sm text-foreground mb-0.5">
+                    <div className="min-w-0 pr-4">
+                      <p className="font-bold text-sm text-foreground mb-0.5 truncate">
                         {load.farmName}
                       </p>
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                        <span>{load.buildingName}</span>
-                        <span>•</span>
-                        <span>{load.quantity.toLocaleString()} Birds</span>
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest truncate">
+                        <span className="truncate">{load.buildingName}</span>
+                        <span className="shrink-0">•</span>
+                        <span className="shrink-0">
+                          {load.quantity.toLocaleString()} Birds
+                        </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      {daysUntil < 0 ? (
+                    <div className="text-right shrink-0">
+                      {daysLeft < 0 ? (
                         <span className="text-xs font-black text-red-500 bg-red-50 dark:bg-red-950/30 px-2 py-1 rounded-md uppercase tracking-wider">
                           Overdue
                         </span>
@@ -378,13 +564,15 @@ export default function DashboardClient({
                           <span
                             className={cn(
                               "text-lg font-black leading-none",
-                              isUrgent ? "text-amber-500" : "text-emerald-500",
+                              isUrgent
+                                ? "text-amber-500"
+                                : "text-blue-600 dark:text-blue-500",
                             )}
                           >
-                            {daysUntil}
+                            {totalDaysCycle}
                           </span>
                           <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-widest mt-1">
-                            Days
+                            Total Days
                           </span>
                         </div>
                       )}

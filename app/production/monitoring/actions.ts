@@ -10,14 +10,12 @@ import { authOptions } from "../../../lib/auth";
 export async function addDailyRecord(formData: FormData) {
   const session = await getServerSession(authOptions);
 
-  // 1. Check Session
   if (!session || !session.user) {
     return { error: "You must be logged in to submit records." };
   }
 
   let userId = (session.user as any).id;
 
-  // 2. The exact same NextAuth fix we used for Expenses!
   if (!userId && session.user.email) {
     const dbUser = await db
       .select()
@@ -38,7 +36,6 @@ export async function addDailyRecord(formData: FormData) {
     return { error: "Could not verify your user account in the database." };
   }
 
-  // 3. Extract form data
   const loadId = Number(formData.get("loadId"));
   const recordDate = formData.get("recordDate") as string;
   const mortality = Number(formData.get("mortality")) || 0;
@@ -51,23 +48,67 @@ export async function addDailyRecord(formData: FormData) {
   }
 
   try {
-    // 4. Save to Database
-    await db.insert(dailyRecords).values({
-      loadId,
-      recordDate,
-      mortality,
-      feedsConsumed,
-      eggCount,
-      remarks: remarks || null,
-      recordedBy: userId,
-    });
+    // FIXED: Use .returning() to grab the newly created ID
+    const [newRecord] = await db
+      .insert(dailyRecords)
+      .values({
+        loadId,
+        recordDate,
+        mortality,
+        feedsConsumed,
+        eggCount,
+        remarks: remarks || null,
+        recordedBy: userId,
+      })
+      .returning({ id: dailyRecords.id });
 
-    // Refresh both the monitoring table AND the new reports page!
     revalidatePath("/production/monitoring");
     revalidatePath("/reports");
-    return { success: true };
+
+    // Pass the newId back to the frontend
+    return { success: true, newId: newRecord.id };
   } catch (error) {
     console.error("Error saving daily record:", error);
     return { error: "Failed to save record. Please try again." };
+  }
+}
+
+// Add these to your existing actions.ts
+
+export async function updateDailyRecord(id: number, formData: FormData) {
+  try {
+    const mortality = Number(formData.get("mortality")) || 0;
+    const feedsConsumed = (formData.get("feedsConsumed") as string) || "0";
+    const eggCount = Number(formData.get("eggCount")) || 0;
+    const remarks = formData.get("remarks") as string;
+
+    await db
+      .update(dailyRecords)
+      .set({
+        mortality,
+        feedsConsumed,
+        eggCount,
+        remarks: remarks || null,
+      })
+      .where(eq(dailyRecords.id, id));
+
+    revalidatePath("/production/monitoring");
+
+    // RETURN the ID here
+    return { success: true, updatedId: id };
+  } catch (error) {
+    console.error("Update error:", error);
+    return { error: "Failed to update record." };
+  }
+}
+
+export async function deleteDailyRecord(id: number) {
+  try {
+    await db.delete(dailyRecords).where(eq(dailyRecords.id, id));
+    revalidatePath("/production/monitoring");
+    return { success: true };
+  } catch (error) {
+    console.error("Delete error:", error);
+    return { error: "Failed to delete record." };
   }
 }

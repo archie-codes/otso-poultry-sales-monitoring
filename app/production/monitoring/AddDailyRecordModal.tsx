@@ -1,208 +1,24 @@
-// "use client";
-
-// import { useState, useEffect } from "react";
-// import { createPortal } from "react-dom";
-// import { addDailyRecord } from "./actions";
-// import { X, Loader2, Save, Activity } from "lucide-react";
-// import { toast } from "sonner";
-
-// export default function AddDailyRecordModal({
-//   activeLoads,
-// }: {
-//   activeLoads: any[];
-// }) {
-//   const [isOpen, setIsOpen] = useState(false);
-//   const [loading, setLoading] = useState(false);
-//   const [mounted, setMounted] = useState(false);
-
-//   useEffect(() => setMounted(true), []);
-
-//   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-//     e.preventDefault();
-//     setLoading(true);
-
-//     const formData = new FormData(e.currentTarget);
-//     const result = await addDailyRecord(formData);
-
-//     if (result.error) {
-//       toast.error("Error Saving Data", {
-//         description: result.error,
-//         style: { backgroundColor: "red", color: "white", border: "none" },
-//       });
-//     } else {
-//       toast.success("Record Saved!", {
-//         description: "The daily monitoring data has been logged.",
-//         style: { backgroundColor: "blue", color: "white", border: "none" },
-//       });
-//       setIsOpen(false);
-//     }
-//     setLoading(false);
-//   }
-
-//   return (
-//     <>
-//       <button
-//         onClick={() => setIsOpen(true)}
-//         className="h-11 px-6 inline-flex items-center justify-center rounded-xl text-sm font-bold bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300"
-//       >
-//         <Activity className="w-5 h-5 mr-2" /> Log Daily Data
-//       </button>
-
-//       {isOpen &&
-//         mounted &&
-//         createPortal(
-//           <div className="fixed inset-0 z-100 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-//             <div className="fixed z-101 w-full max-w-lg border border-border/50 bg-background/95 backdrop-blur-xl p-6 shadow-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200">
-//               <div className="flex justify-between items-center mb-6 sticky top-0 bg-background/95 pb-4 z-10 border-b border-border/50">
-//                 <div>
-//                   <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-//                     <Activity className="text-primary w-5 h-5" /> Daily Input
-//                   </h2>
-//                   <p className="text-sm text-muted-foreground mt-1">
-//                     Log mortality and feeds for today.
-//                   </p>
-//                 </div>
-//                 <button
-//                   onClick={() => setIsOpen(false)}
-//                   className="p-2 rounded-full hover:bg-secondary transition-colors"
-//                 >
-//                   <X className="w-5 h-5" />
-//                 </button>
-//               </div>
-
-//               <form onSubmit={handleSubmit} className="space-y-5">
-//                 <div className="space-y-2">
-//                   <label className="text-sm font-semibold">
-//                     Select Active Building{" "}
-//                     <span className="text-red-500">*</span>
-//                   </label>
-//                   <select
-//                     name="loadId"
-//                     required
-//                     className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
-//                   >
-//                     <option value="">
-//                       -- Select where you are reporting --
-//                     </option>
-//                     {activeLoads.map((load) => (
-//                       <option key={load.id} value={load.id}>
-//                         {load.farmName} - {load.buildingName} (Start Qty:{" "}
-//                         {load.quantity})
-//                       </option>
-//                     ))}
-//                   </select>
-//                 </div>
-
-//                 <div className="space-y-2">
-//                   <label className="text-sm font-semibold">
-//                     Date of Record <span className="text-red-500">*</span>
-//                   </label>
-//                   <input
-//                     type="date"
-//                     name="recordDate"
-//                     required
-//                     defaultValue={new Date().toISOString().split("T")[0]}
-//                     className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
-//                   />
-//                 </div>
-
-//                 <div className="grid grid-cols-2 gap-4 p-4 bg-secondary/20 rounded-xl border border-border/50">
-//                   <div className="space-y-2">
-//                     <label className="text-sm font-semibold text-red-600 dark:text-red-400">
-//                       Mortality (Dead)
-//                     </label>
-//                     <input
-//                       type="number"
-//                       name="mortality"
-//                       defaultValue={0}
-//                       min="0"
-//                       className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-red-500"
-//                     />
-//                   </div>
-//                   <div className="space-y-2">
-//                     <label className="text-sm font-semibold text-amber-600 dark:text-amber-500">
-//                       Feeds (kg/bags)
-//                     </label>
-//                     <input
-//                       type="number"
-//                       step="0.01"
-//                       name="feedsConsumed"
-//                       defaultValue={0}
-//                       min="0"
-//                       className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500"
-//                     />
-//                   </div>
-//                   <div className="space-y-2 col-span-2">
-//                     <label className="text-sm font-semibold text-emerald-600 dark:text-emerald-500">
-//                       Eggs Harvested (Layers Only)
-//                     </label>
-//                     <input
-//                       type="number"
-//                       name="eggCount"
-//                       defaultValue={0}
-//                       min="0"
-//                       className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500"
-//                     />
-//                   </div>
-//                 </div>
-
-//                 <div className="space-y-2">
-//                   <label className="text-sm font-semibold">
-//                     Remarks / Notes
-//                   </label>
-//                   <textarea
-//                     name="remarks"
-//                     placeholder="e.g., Too hot today, birds drinking more water."
-//                     rows={2}
-//                     className="flex w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary resize-none"
-//                   ></textarea>
-//                 </div>
-
-//                 <div className="pt-2 flex justify-end gap-3">
-//                   <button
-//                     type="button"
-//                     onClick={() => setIsOpen(false)}
-//                     className="h-11 px-6 rounded-xl text-sm font-bold bg-secondary hover:bg-secondary/80 transition-colors"
-//                   >
-//                     Cancel
-//                   </button>
-//                   <button
-//                     type="submit"
-//                     disabled={loading}
-//                     className="h-11 px-8 rounded-xl text-sm font-bold bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
-//                   >
-//                     {loading ? (
-//                       <>
-//                         <Loader2 className="w-4 h-4 mr-2 animate-spin inline" />{" "}
-//                         Saving...
-//                       </>
-//                     ) : (
-//                       <>
-//                         <Save className="w-4 h-4 mr-2 inline" /> Submit Record
-//                       </>
-//                     )}
-//                   </button>
-//                 </div>
-//               </form>
-//             </div>
-//           </div>,
-//           document.body,
-//         )}
-//     </>
-//   );
-// }
-
 "use client";
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { addDailyRecord } from "./actions";
-import { X, Loader2, Save, Activity, CalendarIcon } from "lucide-react";
+import {
+  X,
+  Loader2,
+  Save,
+  Activity,
+  CalendarIcon,
+  Check,
+  ChevronsUpDown,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useRouter, useSearchParams } from "next/navigation"; // NEW IMPORTS
 
-// SHADCN UI
+// SHADCN UI... (Keep all your existing UI imports)
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -213,34 +29,53 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 export default function AddDailyRecordModal({
   activeLoads,
 }: {
   activeLoads: any[];
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams(); // NEW
+
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Form States
   const [loadId, setLoadId] = useState("");
+  const [openLoadSearch, setOpenLoadSearch] = useState(false);
   const [recordDate, setRecordDate] = useState<Date | undefined>(new Date());
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, []);
+
+  const selectedLoad = activeLoads.find((l) => String(l.id) === loadId);
+
+  const groupedLoads = activeLoads.reduce((acc: any, load) => {
+    if (!acc[load.farmName]) acc[load.farmName] = [];
+    acc[load.farmName].push(load);
+    return acc;
+  }, {});
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     if (!loadId) {
       toast.error("Missing Field", {
-        description: "Please select an active building.",
+        description: "Please select a building.",
       });
       return;
     }
@@ -258,18 +93,26 @@ export default function AddDailyRecordModal({
     const result = await addDailyRecord(formData);
 
     if (result.error) {
-      toast.error("Error Saving Data", {
-        description: result.error,
-        style: { backgroundColor: "red", color: "white", border: "none" },
-      });
+      toast.error("Error Saving Data", { description: result.error });
     } else {
       toast.success("Record Saved!", {
         description: "The daily monitoring data has been logged.",
-        style: { backgroundColor: "blue", color: "white", border: "none" },
       });
       setIsOpen(false);
       setLoadId("");
       setRecordDate(new Date());
+
+      // NEW: Push the new ID to the URL so the table can highlight it
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("newId", String(result.newId));
+      params.set("page", "1"); // Ensure we go back to page 1 to see the new record
+
+      // We also clear any filters so the new record is guaranteed to be visible
+      params.delete("farm");
+      params.delete("building");
+      params.delete("date");
+
+      router.push(`?${params.toString()}`, { scroll: false });
     }
     setLoading(false);
   }
@@ -278,23 +121,24 @@ export default function AddDailyRecordModal({
     <>
       <Button
         onClick={() => setIsOpen(true)}
-        className="h-11 px-6 rounded-xl text-sm font-bold shadow-sm hover:-translate-y-0.5 transition-all duration-300"
+        className="h-11 px-6 rounded-xl font-bold shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white transition-all active:scale-95"
       >
-        <Activity className="w-5 h-5 mr-2" /> Log Daily Data
+        <Activity className="w-5 h-5 mr-2" />
+        <span className="truncate">Log Daily Data</span>
       </Button>
 
       {isOpen &&
         mounted &&
         createPortal(
           <div className="fixed inset-0 z-100 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="fixed z-101 w-full max-w-lg border border-border/50 bg-background/95 backdrop-blur-xl p-6 shadow-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200">
-              <div className="flex justify-between items-center mb-6 sticky top-0 bg-background/95 pb-4 z-10 border-b border-border/50">
+            <div className="fixed z-101 w-full max-w-xl border bg-background p-6 shadow-2xl rounded-3xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+              <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <div>
-                  <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                    <Activity className="text-primary w-5 h-5" /> Daily Input
+                  <h2 className="text-2xl font-black text-emerald-600">
+                    Daily Input
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Log mortality and feeds for today.
+                    Log mortality, feeds, and eggs for today.
                   </p>
                 </div>
                 <button
@@ -305,75 +149,164 @@ export default function AddDailyRecordModal({
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold">
-                    Select Active Building{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
-                  <Select value={loadId} onValueChange={setLoadId}>
-                    <SelectTrigger className="w-full h-11 rounded-xl bg-background border-input">
-                      <SelectValue placeholder="-- Select where you are reporting --" />
-                    </SelectTrigger>
-                    <SelectContent className="z-200">
-                      {activeLoads.map((load) => (
-                        <SelectItem key={load.id} value={String(load.id)}>
-                          {load.farmName} - {load.buildingName} (Qty:{" "}
-                          {load.quantity})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold">
-                    Date of Record <span className="text-red-500">*</span>
-                  </label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full h-11 rounded-xl justify-start text-left font-normal bg-background border-input",
-                          !recordDate && "text-muted-foreground",
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {recordDate ? (
-                          format(recordDate, "MMM d, yyyy")
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 z-200">
-                      <Calendar
-                        mode="single"
-                        selected={recordDate}
-                        onSelect={setRecordDate}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 p-4 bg-secondary/20 rounded-xl border border-border/50">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* COMBOBOX FOR ACTIVE LOADS (GROUPED BY FARM) */}
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-red-600 dark:text-red-400">
-                      Mortality (Dead)
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      Select Building *
+                    </label>
+                    <Popover
+                      open={openLoadSearch}
+                      onOpenChange={setOpenLoadSearch}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full h-12 justify-between rounded-xl bg-background border-input px-4"
+                        >
+                          {selectedLoad ? (
+                            <div className="flex flex-col items-start gap-0.5 overflow-hidden text-left">
+                              <span className="font-bold text-sm truncate">
+                                {selectedLoad.buildingName}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground uppercase tracking-tight truncate">
+                                {selectedLoad.farmName}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground font-normal">
+                              Search building...
+                            </span>
+                          )}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200 shadow-xl">
+                        <Command>
+                          <CommandInput placeholder="Search building or farm..." />
+                          <CommandList className="max-h-[300px] custom-scrollbar">
+                            <CommandEmpty>
+                              No active buildings found.
+                            </CommandEmpty>
+
+                            {/* RENDER GROUPED LOADS */}
+                            {Object.entries(groupedLoads).map(
+                              ([farmName, loads]: [string, any]) => (
+                                <CommandGroup
+                                  key={farmName}
+                                  heading={farmName}
+                                  className="text-blue-600 font-black tracking-widest"
+                                >
+                                  {loads.map((l: any) => (
+                                    <CommandItem
+                                      key={l.id}
+                                      value={`${l.farmName} ${l.buildingName}`}
+                                      onSelect={() => {
+                                        setLoadId(String(l.id));
+                                        setOpenLoadSearch(false);
+                                      }}
+                                      className="py-3 px-4 cursor-pointer"
+                                    >
+                                      <div className="flex flex-col items-start gap-0.5 text-foreground">
+                                        <span className="font-bold text-sm">
+                                          {l.buildingName}
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                                          {l.quantity.toLocaleString()} Birds
+                                          Active
+                                        </span>
+                                      </div>
+                                      <Check
+                                        className={cn(
+                                          "ml-auto h-4 w-4",
+                                          loadId === String(l.id)
+                                            ? "opacity-100 text-blue-600"
+                                            : "opacity-0",
+                                        )}
+                                      />
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              ),
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* DATE PICKER */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      Record Date *
+                    </label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full h-12 rounded-xl justify-between border-input px-4 font-normal",
+                            !recordDate && "text-muted-foreground",
+                          )}
+                        >
+                          <div className="flex items-center">
+                            <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
+                            {recordDate
+                              ? format(recordDate, "MMM d, yyyy")
+                              : "Pick a date"}
+                          </div>
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 z-200">
+                        <Calendar
+                          mode="single"
+                          selected={recordDate}
+                          onSelect={setRecordDate}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
+                  {/* MORTALITY */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-red-500">
+                      Mortality (Head)
                     </label>
                     <Input
                       type="number"
                       name="mortality"
                       defaultValue={0}
                       min="0"
-                      className="h-11 rounded-xl bg-background"
+                      className="h-11 rounded-xl bg-background font-bold"
                     />
                   </div>
+
+                  {/* EGG COUNT */}
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-amber-600 dark:text-amber-500">
-                      Feeds (kg/bags)
+                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-yellow-600 dark:text-yellow-500">
+                      Egg Count
+                    </label>
+                    <Input
+                      type="number"
+                      name="eggCount"
+                      defaultValue={0}
+                      min="0"
+                      className="h-11 rounded-xl bg-background font-bold"
+                    />
+                  </div>
+
+                  {/* FEED CONSUMED (UPDATED UNIT) */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-600 dark:text-amber-500">
+                      Feeds (Sacks)
                     </label>
                     <Input
                       type="number"
@@ -381,57 +314,44 @@ export default function AddDailyRecordModal({
                       name="feedsConsumed"
                       defaultValue={0}
                       min="0"
-                      className="h-11 rounded-xl bg-background"
-                    />
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <label className="text-sm font-semibold text-emerald-600 dark:text-emerald-500">
-                      Eggs Harvested (Layers)
-                    </label>
-                    <Input
-                      type="number"
-                      name="eggCount"
-                      defaultValue={0}
-                      min="0"
-                      className="h-11 rounded-xl bg-background"
+                      placeholder="e.g. 12.5"
+                      className="h-11 rounded-xl bg-background font-bold"
                     />
                   </div>
                 </div>
 
+                {/* REMARKS */}
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     Remarks / Notes
                   </label>
                   <Textarea
                     name="remarks"
-                    placeholder="e.g., Too hot today, birds drinking more water."
+                    placeholder="e.g., Temperature high, added vitamins to water."
                     rows={2}
                     className="rounded-xl bg-background resize-none"
                   />
                 </div>
 
-                <div className="pt-2 flex justify-end gap-3">
+                <div className="flex justify-end gap-3 pt-6 border-t mt-2">
                   <Button
                     type="button"
-                    variant="secondary"
+                    variant="ghost"
                     onClick={() => setIsOpen(false)}
-                    className="h-11 px-6 rounded-xl font-bold"
+                    className="h-12 px-6 rounded-xl font-bold"
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="h-11 px-8 rounded-xl font-bold hover:-translate-y-0.5 transition-all"
+                    className="h-12 px-10 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg"
                   >
                     {loading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />{" "}
-                        Saving...
-                      </>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     ) : (
                       <>
-                        <Save className="w-4 h-4 mr-2" /> Submit Record
+                        <Save className="mr-2 h-5 w-5" /> Submit Record
                       </>
                     )}
                   </Button>

@@ -46,14 +46,18 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const chickBreeds = [
-  "Cobb",
-  "Cobb 500",
-  "Ross",
-  "Ross 308",
-  "Hubbard",
-  "Arbor Acres",
-  "Indian River",
-  "Bounty",
+  "Cobb 500 (Broiler)",
+  "Ross 308 (Broiler)",
+  "Arbor Acres (Broiler)",
+  "Dekalb White (Layer)",
+  "ISA Brown (Layer)",
+  "Lohmann (Layer)",
+  "Babcock White (Layer)",
+  "Babcock Brown (Layer)",
+  "Sasso (Colored/Free-Range)",
+  "Kabir (Colored/Free-Range)",
+  "Philippine Native",
+  "Other / Mixed",
 ];
 
 export default function EditLoadModal({
@@ -176,7 +180,10 @@ export default function EditLoadModal({
 
             <div className="space-y-2.5">
               <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                Est Harvest
+                Est Harvest{" "}
+                <span className="text-red-500 lowercase tracking-normal text-[10px] ml-1 opacity-80">
+                  (4 Months Estimated)
+                </span>
               </label>
               <Popover>
                 <PopoverTrigger asChild>

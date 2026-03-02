@@ -203,7 +203,7 @@ function FarmCard({ farm, buildings }: { farm: any; buildings: any[] }) {
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
                         <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
-                          Active Flock
+                          Active Load
                         </span>
                       </div>
                     ) : (
