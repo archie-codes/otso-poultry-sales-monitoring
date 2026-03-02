@@ -42,7 +42,7 @@ export default async function SettingsPage() {
       <div className="flex items-center gap-4 py-2">
         <div className="h-px bg-border/50 flex-1"></div>
         <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground uppercase tracking-widest">
-          <Users className="w-4 h-4" /> Active Directory
+          <Users className="w-4 h-4" /> Active System Users
         </div>
         <div className="h-px bg-border/50 flex-1"></div>
       </div>

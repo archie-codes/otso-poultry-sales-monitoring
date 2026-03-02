@@ -5,6 +5,18 @@ import { users } from "@/src/db/schema"; // Points to db/schema.ts
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id?: string;
+      name?: string | null;
+      email?: string | null;
+      imageUrl?: string | null; // <-- Now TS knows about this!
+      role: "owner" | "staff"; // <-- And this!
+    };
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({

@@ -20,17 +20,20 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // 1. Fetch the session
+  // 1. Fetch the session on the server to prevent layout shifts
   const session = await getServerSession(authOptions);
 
-  // 2. Extract role and name safely
+  // 2. Extract user data using your custom NextAuth types
+  // This ensures the sidebar and header reflect the correct 'owner' or 'staff' role
   const role = (session?.user as any)?.role ?? "staff";
   const name = session?.user?.name ?? "Farm Staff";
   const imageUrl = (session?.user as any)?.imageUrl ?? null;
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body
+        className={`${inter.className} antialiased selection:bg-blue-100 selection:text-blue-900`}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
@@ -38,11 +41,18 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
+            {/* AppLayout acts as the primary wrapper for your sidebar and header.
+                Passing the session data here allows for immediate UI responsiveness.
+            */}
             <AppLayout role={role} userName={name} imageUrl={imageUrl}>
-              {children}
+              <main className="min-h-screen">{children}</main>
             </AppLayout>
           </AuthProvider>
-          <Toaster richColors position="top-right" />
+
+          {/* Toaster is positioned top-right to avoid overlapping with 
+              mobile navigation elements or your action modals.
+          */}
+          <Toaster richColors position="top-right" closeButton />
         </ThemeProvider>
       </body>
     </html>

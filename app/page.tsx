@@ -1,80 +1,108 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../lib/auth";
 import { redirect } from "next/navigation";
-import CardSummary from "../components/CardSummary";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
-import LineChart from "../components/LineChart";
-import { ArrowUpRight, ArrowDownRight, Wallet, DollarSign } from "lucide-react";
+import { db } from "../src";
+import { loads, buildings, farms } from "../src/db/schema";
+import { eq, asc } from "drizzle-orm";
+import DashboardClient from "./DashboardClient";
 
-export default async function Dashboard() {
+export default async function DashboardPage(props: {
+  // Safely handle searchParams for both Next.js 14 and 15
+  searchParams:
+    | Promise<{ province?: string; farm?: string }>
+    | { province?: string; farm?: string };
+}) {
   const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
 
-  // If the user is staff, kick them to Daily Monitoring
-  if ((session?.user as any)?.role === "staff") {
-    redirect("/production/monitoring");
-  }
+  // Await params to prevent Next.js dynamic routing errors
+  const searchParams = await props.searchParams;
+  const selectedProvince = searchParams?.province;
+  const selectedFarm = searchParams?.farm;
+
+  // 1. Fetch Filter Options
+  const allFarms = await db.select().from(farms);
+  const uniqueProvinces = Array.from(
+    new Set(allFarms.map((f) => f.province)),
+  ).filter(Boolean);
+
+  // 2. Fetch Active Loads
+  const activeLoads = await db
+    .select({
+      id: loads.id,
+      quantity: loads.actualQuantityLoad,
+      initialCapital: loads.initialCapital,
+      loadDate: loads.loadDate,
+      harvestDate: loads.harvestDate,
+      farmName: farms.name,
+      province: farms.province,
+      buildingName: buildings.name,
+    })
+    .from(loads)
+    .innerJoin(buildings, eq(loads.buildingId, buildings.id))
+    .innerJoin(farms, eq(buildings.farmId, farms.id))
+    .where(eq(loads.isActive, true))
+    .orderBy(asc(loads.loadDate));
+
+  // 3. Dynamic Filtering Logic
+  const filteredLoads = activeLoads.filter((load) => {
+    const provinceMatch =
+      !selectedProvince || load.province === selectedProvince;
+    const farmMatch = !selectedFarm || load.farmName === selectedFarm;
+    return provinceMatch && farmMatch;
+  });
+
+  // 4. Calculate Advanced Metrics using FILTERED loads
+  const totalBirds = filteredLoads.reduce(
+    (sum, l) => sum + Number(l.quantity),
+    0,
+  );
+  const totalCapital = filteredLoads.reduce(
+    (sum, l) => sum + Number(l.initialCapital || 0),
+    0,
+  );
+  const pendingCapitalCount = filteredLoads.filter(
+    (l) => !l.initialCapital || Number(l.initialCapital) === 0,
+  ).length;
+
+  const capacityUtilization = 0; // Hardcoded until capacity is added to DB
+
+  // 5. Prepare Chart Data (Aggregated by Farm)
+  const farmChartData = filteredLoads.reduce((acc: any, curr) => {
+    const existing = acc.find((item: any) => item.name === curr.farmName);
+    if (existing) {
+      existing.birds += curr.quantity;
+    } else {
+      acc.push({ name: curr.farmName, birds: curr.quantity });
+    }
+    return acc;
+  }, []);
+
+  // 6. Upcoming Harvests
+  const upcomingHarvests = filteredLoads
+    .filter((l) => l.harvestDate)
+    .sort(
+      (a, b) =>
+        new Date(a.harvestDate!).getTime() - new Date(b.harvestDate!).getTime(),
+    )
+    .slice(0, 5);
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Dashboard Overview
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Welcome back. Here&apos;s what&apos;s happening at Otso Poultry Farm
-          today.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <CardSummary
-          title="Total Sales Today"
-          amount="₱120,000"
-          icon={<ArrowUpRight className="w-5 h-5" />}
-          trend="+12.5%"
-          gradient="from-blue-500 to-cyan-400"
-        />
-        <CardSummary
-          title="Total Expenses Today"
-          amount="₱75,000"
-          icon={<ArrowDownRight className="w-5 h-5" />}
-          trend="-2.4%"
-          gradient="from-rose-500 to-orange-400"
-        />
-        <CardSummary
-          title="Net Income Today"
-          amount="₱45,000"
-          icon={<Wallet className="w-5 h-5" />}
-          trend="+8.2%"
-          gradient="from-emerald-500 to-teal-400"
-        />
-        <CardSummary
-          title="Monthly Net Income"
-          amount="₱850,000"
-          icon={<DollarSign className="w-5 h-5" />}
-          trend="+18.1%"
-          gradient="from-purple-500 to-indigo-400"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6">
-        <Card className="col-span-1 border-border/50 bg-background/50 backdrop-blur-xl">
-          <CardHeader>
-            <CardTitle>Monthly Sales vs Expenses</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Financial performance over the last 6 months (Mock Data).
-            </p>
-          </CardHeader>
-          <CardContent>
-            <LineChart />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <DashboardClient
+      userName={session.user?.name}
+      imageUrl={(session.user as any)?.imageUrl}
+      loads={filteredLoads}
+      provinces={uniqueProvinces}
+      farms={allFarms.map((f) => f.name)}
+      chartData={farmChartData}
+      upcomingHarvests={upcomingHarvests}
+      metrics={{
+        totalBirds,
+        totalCapital,
+        pendingCapitalCount,
+        activeLoadsCount: filteredLoads.length,
+        capacityUtilization,
+      }}
+    />
   );
 }

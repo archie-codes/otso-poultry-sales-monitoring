@@ -3,86 +3,173 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { addLoad } from "./actions";
-import { X, Loader2, Save, Egg } from "lucide-react";
+import {
+  X,
+  Loader2,
+  Save,
+  CalendarIcon,
+  Check,
+  ChevronsUpDown,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "sonner";
+import { format, addMonths } from "date-fns";
+import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+
+// SHADCN UI
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import Image from "next/image";
+import henIcon from "@/public/hen.png";
+
+const HenIcon = ({ className }: { className?: string }) => (
+  <span className={`relative block shrink-0 ${className ?? ""}`}>
+    <Image
+      src={henIcon}
+      alt="Hen"
+      fill
+      sizes="64px"
+      className="object-contain brightness-0 invert"
+    />
+  </span>
+);
+
+const chickBreeds = [
+  "Cobb 500 (Broiler)",
+  "Ross 308 (Broiler)",
+  "Arbor Acres (Broiler)",
+  "Dekalb White (Layer)",
+  "ISA Brown (Layer)",
+  "Lohmann (Layer)",
+  "Babcock White (Layer)",
+  "Babcock Brown (Layer)",
+  "Sasso (Colored/Free-Range)",
+  "Kabir (Colored/Free-Range)",
+  "Philippine Native",
+  "Other / Mixed",
+];
 
 export default function AddLoadModal({
   availableBuildings,
 }: {
   availableBuildings: any[];
 }) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  const [loadDate, setLoadDate] = useState(
-    new Date().toISOString().split("T")[0],
+  const [buildingId, setBuildingId] = useState("");
+  const [openBuildingSearch, setOpenBuildingSearch] = useState(false);
+  const [chickType, setChickType] = useState("");
+  const [openChickType, setOpenChickType] = useState(false);
+
+  const [loadDate, setLoadDate] = useState<Date | undefined>(new Date());
+  const [harvestDate, setHarvestDate] = useState<Date | undefined>(
+    addMonths(new Date(), 1.5),
   );
-  const [harvestDate, setHarvestDate] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + 4);
-    return d.toISOString().split("T")[0];
-  });
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    // Accessibility: Close on ESC key
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, []);
 
-  function handleLoadDateChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const newDateStr = e.target.value;
-    setLoadDate(newDateStr);
+  const selectedBuilding = availableBuildings.find(
+    (b) => String(b.id) === buildingId,
+  );
 
-    if (newDateStr) {
-      const newDate = new Date(newDateStr);
-      newDate.setMonth(newDate.getMonth() + 4);
-      setHarvestDate(newDate.toISOString().split("T")[0]);
-    }
+  function handleLoadDateChange(date: Date | undefined) {
+    setLoadDate(date);
+    if (date) setHarvestDate(addMonths(date, 1.5));
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
 
+    if (!buildingId) {
+      toast.error("Missing Field", {
+        description: "Please select a building first.",
+      });
+      return;
+    }
+
+    setLoading(true);
     const formData = new FormData(e.currentTarget);
+    formData.set("buildingId", buildingId);
+    formData.set("chickType", chickType);
+    formData.set("loadDate", format(loadDate!, "yyyy-MM-dd"));
+
+    if (harvestDate) {
+      formData.set("harvestDate", format(harvestDate, "yyyy-MM-dd"));
+    }
+
     const result = await addLoad(formData);
 
     if (result.error) {
-      // Custom Red Toast for Errors
-      toast.error("Error Loading Chicks", {
+      toast.error("Error", {
         description: result.error,
-        style: { backgroundColor: "red", color: "white", border: "none" },
       });
     } else {
-      // Custom Blue Toast for Success
-      toast.success("Chicks Loaded!", {
-        description:
-          "The building is now active and ready for daily monitoring.",
-        style: { backgroundColor: "blue", color: "white", border: "none" },
+      toast.success("Success!", {
+        description: "Load details saved and building activated.",
       });
+
       setIsOpen(false);
+      setBuildingId("");
+      setChickType("");
+
+      if (result.id) {
+        router.push(`/production/loading?newId=${result.id}`);
+        setTimeout(() => {
+          router.replace("/production/loading", { scroll: false });
+        }, 4000);
+      }
     }
     setLoading(false);
   }
 
   return (
     <>
-      <button
+      <Button
         onClick={() => setIsOpen(true)}
-        className="h-11 px-6 inline-flex items-center justify-center rounded-xl text-sm font-bold bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:-translate-y-0.5 transition-all duration-300"
+        className="h-11 px-6 rounded-xl font-bold shadow-sm bg-blue-600 hover:bg-blue-700 text-white transition-all active:scale-95"
       >
-        <Egg className="w-5 h-5 mr-2" /> Load New Chicks
-      </button>
+        <HenIcon className="h-6 w-6 mr-2" />
+        <span className="truncate">Load New Chicks</span>
+      </Button>
 
       {isOpen &&
         mounted &&
         createPortal(
           <div className="fixed inset-0 z-100 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="fixed z-101 w-full max-w-2xl border border-border/50 bg-background/95 backdrop-blur-xl p-6 shadow-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200">
-              <div className="flex justify-between items-center mb-6 sticky top-0 bg-background/95 pb-4 z-10 border-b border-border/50">
+            <div className="fixed z-101 w-full max-w-2xl border bg-background p-6 shadow-2xl rounded-3xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <div>
-                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                    Load Chicks into Building
+                  <h2 className="text-2xl font-black text-blue-600">
+                    New Load Entry
                   </h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Set up the initial capital and batch details.
+                  <p className="text-sm text-muted-foreground">
+                    Select an empty building and set the batch details.
                   </p>
                 </div>
                 <button
@@ -95,142 +182,271 @@ export default function AddLoadModal({
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold">
-                    Select Building <span className="text-red-500">*</span>
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Select Building *
                   </label>
-                  <select
-                    name="buildingId"
-                    required
-                    className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                  <Popover
+                    open={openBuildingSearch}
+                    onOpenChange={setOpenBuildingSearch}
                   >
-                    <option value="">-- Choose an empty building --</option>
-                    {availableBuildings.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.farmName} - {b.name}
-                      </option>
-                    ))}
-                  </select>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full h-14 justify-between rounded-xl bg-background border-input px-4"
+                      >
+                        {selectedBuilding ? (
+                          <div className="flex flex-col items-start gap-0.5 overflow-hidden text-left">
+                            <span className="font-bold text-sm truncate">
+                              {selectedBuilding.farmName} —{" "}
+                              {selectedBuilding.name}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-tight">
+                              {selectedBuilding.barangay},{" "}
+                              {selectedBuilding.city}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            Search by Farm or Building...
+                          </span>
+                        )}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200 shadow-xl">
+                      <Command>
+                        <CommandInput placeholder="Type building or farm name..." />
+                        <CommandList className="max-h-[300px]">
+                          <CommandEmpty>
+                            No available buildings found.
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {availableBuildings.map((b) => (
+                              <CommandItem
+                                key={b.id}
+                                value={`${b.farmName} ${b.name} ${b.city}`}
+                                onSelect={() => {
+                                  setBuildingId(String(b.id));
+                                  setOpenBuildingSearch(false);
+                                }}
+                                className="py-3 px-4"
+                              >
+                                <div className="flex flex-col items-start gap-0.5">
+                                  <span className="font-bold text-sm">
+                                    {b.farmName} — {b.name}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground uppercase">
+                                    {b.barangay}, {b.city}
+                                  </span>
+                                </div>
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    buildingId === String(b.id)
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid md:grid-cols-2 gap-5">
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold">
-                      Load Date <span className="text-red-500">*</span>
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      Load Date *
                     </label>
-                    <input
-                      type="date"
-                      name="loadDate"
-                      required
-                      value={loadDate}
-                      onChange={handleLoadDateChange}
-                      className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full h-12 rounded-xl justify-between border-input px-4 font-normal"
+                        >
+                          <div className="flex items-center">
+                            <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
+                            {loadDate
+                              ? format(loadDate, "MMM d, yyyy")
+                              : "Pick date"}
+                          </div>
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 z-200">
+                        <Calendar
+                          mode="single"
+                          selected={loadDate}
+                          onSelect={handleLoadDateChange}
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
+
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold">
-                      Est. Harvest Date
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      Est Harvest
                     </label>
-                    <input
-                      type="date"
-                      name="harvestDate"
-                      value={harvestDate}
-                      onChange={(e) => setHarvestDate(e.target.value)}
-                      className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full h-12 rounded-xl justify-between border-input px-4 font-normal"
+                        >
+                          <div className="flex items-center">
+                            <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
+                            {harvestDate
+                              ? format(harvestDate, "MMM d, yyyy")
+                              : "Pick date"}
+                          </div>
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 z-200">
+                        <Calendar
+                          mode="single"
+                          selected={harvestDate}
+                          onSelect={setHarvestDate}
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-5">
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                       Type of Chick
                     </label>
-                    <input
-                      type="text"
-                      name="chickType"
-                      placeholder="e.g., Cobb 500"
-                      className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
-                    />
+                    <Popover
+                      open={openChickType}
+                      onOpenChange={setOpenChickType}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full h-12 justify-between rounded-xl font-normal border-input px-4"
+                        >
+                          {chickType || "Select breed..."}
+                          <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
+                        <Command>
+                          <CommandInput placeholder="Search breed..." />
+                          <CommandList>
+                            <CommandEmpty>No breed found.</CommandEmpty>
+                            <CommandGroup>
+                              {chickBreeds.map((breed) => (
+                                <CommandItem
+                                  key={breed}
+                                  value={breed}
+                                  onSelect={(v) => {
+                                    const selectedBreed =
+                                      chickBreeds.find(
+                                        (b) =>
+                                          b.toLowerCase() === v.toLowerCase(),
+                                      ) || v;
+                                    setChickType(selectedBreed);
+                                    setOpenChickType(false);
+                                  }}
+                                  className="py-2.5 px-4"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      chickType === breed
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                  {breed}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold">
-                      Customer Name
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      Supplier / Source
                     </label>
-                    <input
-                      type="text"
+                    <Input
                       name="customerName"
-                      placeholder="Optional"
-                      className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                      placeholder="e.g. Magnolia"
+                      className="h-12 rounded-xl border-input px-4"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-secondary/20 rounded-xl border border-border/50">
+                <div className="grid md:grid-cols-3 gap-4 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold">
-                      Actual Quantity Load{" "}
-                      <span className="text-red-500">*</span>
+                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-600 dark:text-blue-400">
+                      Quantity *
                     </label>
-                    <input
+                    <Input
                       type="number"
                       name="actualQuantityLoad"
                       required
-                      placeholder="e.g., 10000"
-                      className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                      placeholder="10000"
+                      className="h-11 rounded-xl bg-background font-bold text-lg"
                     />
                   </div>
-
-                  {/* REMOVED: actualCostPerChick input has been completely removed */}
-
                   <div className="space-y-2">
-                    {/* MODIFIED: sellingPrice is now optional */}
-                    <label className="text-sm font-semibold">
-                      Expected Selling Price (₱) (Optional)
+                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                      Target Selling
                     </label>
-                    <input
+                    <Input
                       type="number"
                       step="0.01"
                       name="sellingPrice"
-                      placeholder="e.g., 210.00"
-                      className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                      placeholder="210.00"
+                      className="h-11 rounded-xl bg-background"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold">
-                      Initial Capital (₱)
+                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-500">
+                      Capital per Load
                     </label>
-                    <input
+                    <Input
                       type="number"
                       step="0.01"
                       name="initialCapital"
-                      placeholder="e.g., 500000.00"
-                      className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                      placeholder="500000.00"
+                      className="h-11 rounded-xl bg-background"
                     />
                   </div>
                 </div>
 
-                <div className="pt-4 flex justify-end gap-3">
-                  <button
+                <div className="flex justify-end gap-3 pt-6 border-t mt-2">
+                  <Button
                     type="button"
+                    variant="ghost"
                     onClick={() => setIsOpen(false)}
-                    className="h-11 px-6 rounded-xl text-sm font-bold bg-secondary hover:bg-secondary/80 transition-colors"
+                    className="h-12 px-6 rounded-xl font-bold"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="submit"
                     disabled={loading}
-                    className="h-11 px-8 rounded-xl text-sm font-bold bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
+                    className="h-12 px-10 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
                   >
                     {loading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin inline" />{" "}
-                        Loading...
-                      </>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     ) : (
                       <>
-                        <Save className="w-4 h-4 mr-2 inline" /> Save & Activate
-                        Building
+                        <Save className="mr-2 h-5 w-5" /> Save & Activate Load
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </div>
