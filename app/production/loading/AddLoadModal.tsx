@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/command";
 import Image from "next/image";
 import henIcon from "@/public/hen.png";
+import { FormattedNumberInput } from "@/components/ui/FormattedNumberInput";
 
 const HenIcon = ({ className }: { className?: string }) => (
   <span className={`relative block shrink-0 ${className ?? ""}`}>
@@ -397,36 +398,34 @@ export default function AddLoadModal({
                     <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-600 dark:text-blue-400">
                       Quantity *
                     </label>
-                    <Input
-                      type="number"
+                    <FormattedNumberInput
                       name="actualQuantityLoad"
                       required
-                      placeholder="10000"
+                      placeholder="10,000"
                       className="h-11 rounded-xl bg-background font-bold text-lg"
                     />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
-                      Target Selling
+                      Target Selling (₱)
                     </label>
-                    <Input
-                      type="number"
-                      step="0.01"
+                    <FormattedNumberInput
                       name="sellingPrice"
+                      required
                       placeholder="210.00"
-                      className="h-11 rounded-xl bg-background"
+                      allowDecimals={true}
+                      className="h-11 rounded-xl bg-background font-bold"
                     />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-500">
                       Capital per Load
                     </label>
-                    <Input
-                      type="number"
-                      step="0.01"
+                    <FormattedNumberInput
                       name="initialCapital"
-                      placeholder="500000.00"
-                      className="h-11 rounded-xl bg-background"
+                      placeholder="1,500,000.00"
+                      allowDecimals={true}
+                      className="h-11 rounded-xl bg-background font-bold"
                     />
                   </div>
                 </div>

@@ -184,7 +184,7 @@ export default function DashboardClient({
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl border-border shadow-xl">
+              <PopoverContent className="w-(--radix-popover-trigger-width) p-0 rounded-xl border-border shadow-xl">
                 <Command>
                   <CommandInput placeholder="Search region..." />
                   <CommandList className="max-h-[250px] custom-scrollbar">
@@ -255,7 +255,7 @@ export default function DashboardClient({
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl border-border shadow-xl">
+              <PopoverContent className="w-(--radix-popover-trigger-width) p-0 rounded-xl border-border shadow-xl">
                 <Command>
                   <CommandInput placeholder="Search farm..." />
                   <CommandList className="max-h-[250px] custom-scrollbar">

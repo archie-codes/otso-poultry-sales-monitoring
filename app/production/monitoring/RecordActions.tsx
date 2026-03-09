@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, Lock } from "lucide-react"; // Added Lock icon
 import { Button } from "@/components/ui/button";
 import { deleteDailyRecord } from "./actions";
 import { toast } from "sonner";
@@ -22,10 +22,20 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"; // Added Tooltip imports
+} from "@/components/ui/tooltip";
 
-export default function RecordActions({ record }: { record: any }) {
+// NEW: Accept userRole as a prop
+export default function RecordActions({
+  record,
+  userRole,
+}: {
+  record: any;
+  userRole: string;
+}) {
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // SECURITY: Check if the user is an owner
+  const isOwner = userRole === "owner";
 
   async function onDelete() {
     setIsDeleting(true);
@@ -38,14 +48,25 @@ export default function RecordActions({ record }: { record: any }) {
     setIsDeleting(false);
   }
 
+  // IF STAFF: Return a clean, view-only badge instead of buttons
+  if (!isOwner) {
+    return (
+      <div className="flex justify-end pr-2">
+        <div className="flex items-center gap-1.5 text-slate-400 bg-slate-50 dark:bg-slate-900/50 px-2 py-1 rounded-md">
+          <Lock className="w-3 h-3" />
+          <span className="text-[9px] font-bold uppercase tracking-widest">
+            Locked
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // IF OWNER: Return the full edit and delete controls
   return (
     <div className="flex items-center justify-end gap-1">
-      {/* EDIT MODAL 
-        (This component already has its internal TooltipProvider) 
-      */}
       <EditDailyRecordModal record={record} />
 
-      {/* DELETE WITH CONFIRMATION & TOOLTIP */}
       <TooltipProvider>
         <Tooltip delayDuration={300}>
           <AlertDialog>
@@ -90,7 +111,7 @@ export default function RecordActions({ record }: { record: any }) {
                 </AlertDialogCancel>
                 <AlertDialogAction
                   onClick={onDelete}
-                  className="bg-red-500 hover:bg-blaxck-600 rounded-xl font-bold text-white shadow-md transition-all active:scale-95"
+                  className="bg-red-500 hover:bg-red-600 rounded-xl font-bold text-white shadow-md transition-all active:scale-95"
                 >
                   Delete Record
                 </AlertDialogAction>

@@ -30,7 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Calendar } from "@/components/ui/calendar"; // Make sure you have this installed!
+import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
 import {
   Edit2,
@@ -44,6 +44,9 @@ import {
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+// IMPORT THE SMART INPUT COMPONENT
+import { FormattedNumberInput } from "@/components/ui/FormattedNumberInput";
 
 const chickBreeds = [
   "Cobb 500 (Broiler)",
@@ -74,7 +77,7 @@ export default function EditLoadModal({
   const [openChickType, setOpenChickType] = useState(false);
   const [chickType, setChickType] = useState(load.chickType || "");
 
-  // CALENDAR STATE (Initialize with existing database dates)
+  // CALENDAR STATE
   const [loadDate, setLoadDate] = useState<Date | undefined>(
     load.loadDate ? new Date(load.loadDate) : undefined,
   );
@@ -109,9 +112,9 @@ export default function EditLoadModal({
     if (result?.error) {
       toast.error("Update Failed", { description: result.error });
     } else {
-      toast.success("Load details updated successfully!"); // FIXED: Terminology updated
+      toast.success("Load details updated successfully!");
       setIsOpen(false);
-      if (onSuccess) onSuccess(); // FIXED: Triggers the glowing card effect!
+      if (onSuccess) onSuccess();
     }
     setLoading(false);
   }
@@ -145,7 +148,7 @@ export default function EditLoadModal({
         <Separator />
 
         <form onSubmit={handleSubmit} className="space-y-6 mt-6">
-          {/* DATE GRID (Using Custom Popover Calendars) */}
+          {/* 1. DATE GRID */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-2.5">
               <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -215,21 +218,8 @@ export default function EditLoadModal({
             </div>
           </div>
 
-          {/* QUANTITY AND BREED GRID */}
+          {/* 2. BREED AND CUSTOMER GRID */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div className="space-y-2.5">
-              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                Chick Quantity
-              </label>
-              <Input
-                name="quantity"
-                type="number"
-                required
-                defaultValue={load.quantity}
-                className="rounded-xl h-12 text-lg font-bold"
-              />
-            </div>
-
             <div className="space-y-2.5">
               <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 Chick Type
@@ -287,22 +277,6 @@ export default function EditLoadModal({
                 </PopoverContent>
               </Popover>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div className="space-y-2.5">
-              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                Capital per Load (₱)
-              </label>
-              <Input
-                name="initialCapital"
-                type="number"
-                step="0.01"
-                defaultValue={load.initialCapital || ""}
-                placeholder="Capital per Load"
-                className="rounded-xl h-12"
-              />
-            </div>
 
             <div className="space-y-2.5">
               <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -318,6 +292,49 @@ export default function EditLoadModal({
             </div>
           </div>
 
+          {/* 3. NUMBER GRID (Using FormattedNumberInput) */}
+          <div className="grid md:grid-cols-3 gap-4 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-600 dark:text-blue-400">
+                Quantity *
+              </label>
+              <FormattedNumberInput
+                name="quantity"
+                required
+                defaultValue={load.quantity}
+                placeholder="10,000"
+                className="h-11 rounded-xl bg-background font-bold text-lg"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                Target Selling (₱)
+              </label>
+              <FormattedNumberInput
+                name="sellingPrice"
+                allowDecimals={true}
+                defaultValue={load.sellingPrice}
+                placeholder="210.00"
+                className="h-11 rounded-xl bg-background font-bold"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-500">
+                Capital per Load (₱)
+              </label>
+              <FormattedNumberInput
+                name="initialCapital"
+                allowDecimals={true}
+                defaultValue={load.initialCapital}
+                placeholder="1,500,000.00"
+                className="h-11 rounded-xl bg-background font-bold"
+              />
+            </div>
+          </div>
+
+          {/* ACTION BUTTONS */}
           <div className="pt-6 mt-2 border-t border-border/50 flex justify-end gap-3">
             <Button
               type="button"

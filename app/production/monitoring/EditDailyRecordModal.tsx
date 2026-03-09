@@ -20,7 +20,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"; // Added Tooltip imports
+} from "@/components/ui/tooltip";
 import { useRouter, useSearchParams } from "next/navigation";
 
 export default function EditDailyRecordModal({ record }: { record: any }) {
@@ -42,11 +42,9 @@ export default function EditDailyRecordModal({ record }: { record: any }) {
       toast.success("Record updated successfully");
       setIsOpen(false);
 
-      // --- TRIGGER THE FLASH EFFECT ---
       const params = new URLSearchParams(searchParams.toString());
-      params.set("newId", String(record.id)); // Use the current record ID
+      params.set("newId", String(record.id));
 
-      // Push the ID to the URL to trigger the useEffect highlight in MonitoringTableClient
       router.push(`?${params.toString()}`, { scroll: false });
     }
     setLoading(false);
@@ -86,8 +84,8 @@ export default function EditDailyRecordModal({ record }: { record: any }) {
             </DialogHeader>
 
             <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-              <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
-                {/* MORTALITY */}
+              {/* CHANGED TO grid-cols-2 */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-red-500">
                     Mortality
@@ -100,20 +98,6 @@ export default function EditDailyRecordModal({ record }: { record: any }) {
                     className="h-10 rounded-xl bg-background font-bold"
                   />
                 </div>
-                {/* EGGS */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">
-                    Eggs
-                  </label>
-                  <Input
-                    type="number"
-                    name="eggCount"
-                    defaultValue={Number(record.eggs)}
-                    min="0"
-                    className="h-10 rounded-xl bg-background font-bold"
-                  />
-                </div>
-                {/* FEEDS/SACKS */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-amber-600">
                     Sacks
@@ -129,7 +113,6 @@ export default function EditDailyRecordModal({ record }: { record: any }) {
                 </div>
               </div>
 
-              {/* REMARKS */}
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                   Remarks
@@ -143,7 +126,6 @@ export default function EditDailyRecordModal({ record }: { record: any }) {
                 />
               </div>
 
-              {/* ACTION BUTTONS */}
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button
                   type="button"

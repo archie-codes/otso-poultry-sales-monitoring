@@ -9,6 +9,7 @@ import {
   pgEnum,
   date,
   boolean,
+  varchar,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("user_role", ["owner", "staff"]);
@@ -99,7 +100,6 @@ export const dailyRecords = pgTable("daily_records", {
 
   recordDate: date("record_date").notNull(),
   mortality: integer("mortality").notNull().default(0),
-  eggCount: integer("egg_count").notNull().default(0),
   feedsConsumed: numeric("feeds_consumed", { precision: 10, scale: 2 })
     .notNull()
     .default("0"),
@@ -132,4 +132,52 @@ export const expenses = pgTable("expenses", {
     .references(() => users.id)
     .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ==========================================
+// NEW: HARVEST RECORDS (For Partial/Batch Harvesting)
+// ==========================================
+export const harvestRecords = pgTable("harvest_records", {
+  id: serial("id").primaryKey(),
+
+  // Links this specific harvest batch back to the original load/flock
+  loadId: integer("load_id")
+    .references(() => loads.id, { onDelete: "cascade" })
+    .notNull(),
+
+  // The exact date you pulled these specific birds out
+  harvestDate: date("harvest_date").notNull(),
+
+  // How many birds were sold in this specific transaction
+  quantity: integer("quantity").notNull(),
+
+  // The exact price you sold them for ON THIS DAY (since prices change)
+  sellingPrice: numeric("selling_price", { precision: 10, scale: 2 }).notNull(),
+
+  // Who bought this specific batch
+  customerName: varchar("customer_name", { length: 255 }),
+
+  // Any extra notes (e.g., "Truck delayed", "Slightly underweight")
+  remarks: text("remarks"),
+
+  // Audit trail: who logged this harvest in the system
+  recordedBy: integer("recorded_by")
+    .references(() => users.id)
+    .notNull(),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ==========================================
+// For notifications
+// ==========================================
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id), // The staff who logged in
+  recipientId: integer("recipient_id"), // Ma'am Lani's Admin ID
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").default("login"), // login, expense, harvest, etc.
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
 });

@@ -6,10 +6,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
+import henIcon from "@/public/hen.svg"; // <-- Added for consistency with Sidebar
 
 // Merged Icons needed for both Navbar and Mobile Menu
 import {
-  Bell,
   Moon,
   Sun,
   Menu,
@@ -17,10 +17,12 @@ import {
   TrendingDown,
   Settings,
   LogOut,
-  Egg,
   Activity,
   Tractor,
   FileBarChart,
+  Archive, // <-- NEW
+  Users, // <-- NEW
+  ShieldAlert, // <-- NEW
 } from "lucide-react";
 
 // Shadcn Sheet components for the slide-out drawer
@@ -31,14 +33,34 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-// 1. EXACT SAME GROUPS FROM YOUR SIDEBAR
+// NEW: Import the NotificationBell component
+import NotificationBell from "./NotificationBell";
+
+// Custom Hen Icon Component to match Sidebar
+const HenIcon = ({ className }: { className?: string }) => {
+  return (
+    <span
+      className={`relative block h-[18px] w-[18px] shrink-0 ${className ?? ""}`}
+    >
+      <Image
+        src={henIcon}
+        alt="Hen"
+        fill
+        sizes="18px"
+        className="object-contain dark:brightness-0 dark:invert"
+      />
+    </span>
+  );
+};
+
+// 1. EXACT SAME GROUPS FROM YOUR UPDATED SIDEBAR
 const ownerGroups = [
   {
     label: "Operations",
     items: [
       { name: "Dashboard", href: "/", icon: LayoutDashboard },
       { name: "Farm Setup", href: "/farms", icon: Tractor },
-      { name: "Chick Loading", href: "/production/loading", icon: Egg },
+      { name: "Chick Loading", href: "/production/loading", icon: HenIcon },
       {
         name: "Daily Monitoring",
         href: "/production/monitoring",
@@ -51,11 +73,16 @@ const ownerGroups = [
     items: [
       { name: "Expenses", href: "/expenses", icon: TrendingDown },
       { name: "Master Reports", href: "/reports", icon: FileBarChart },
+      { name: "Historical Ledger", href: "/reports/history", icon: Archive },
     ],
   },
   {
     label: "System",
-    items: [{ name: "Settings", href: "/settings", icon: Settings }],
+    items: [
+      { name: "Settings", href: "/settings", icon: Settings },
+      { name: "Active Staff", href: "/settings/users", icon: Users },
+      { name: "System Logs", href: "/settings/logs", icon: ShieldAlert },
+    ],
   },
 ];
 
@@ -74,10 +101,12 @@ const staffGroups = [
 ];
 
 export default function Navbar({
+  userId,
   userName,
   role,
   imageUrl,
 }: {
+  userId?: string;
   userName?: string;
   role?: string;
   imageUrl?: string;
@@ -143,16 +172,21 @@ export default function Navbar({
                     {group.label}
                   </h3>
                   {group.items.map((item) => {
+                    // UPDATED HIGHLIGHT LOGIC TO MATCH SIDEBAR
+                    const itemHref = item.href || "";
                     const isActive =
-                      pathname === item.href ||
-                      pathname.startsWith(item.href + "/");
+                      pathname === itemHref ||
+                      (pathname.startsWith(itemHref + "/") &&
+                        itemHref !== "/reports" &&
+                        itemHref !== "/settings");
+
                     const isStrictActive =
-                      item.href === "/" ? pathname === "/" : isActive;
+                      itemHref === "/" ? pathname === "/" : isActive;
 
                     return (
                       <Link
                         key={item.name}
-                        href={item.href}
+                        href={itemHref}
                         onClick={() => setIsOpen(false)} // IMPORTANT: Closes the drawer when a link is clicked
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
                           isStrictActive
@@ -191,7 +225,7 @@ export default function Navbar({
           </SheetContent>
         </Sheet>
 
-        {/* Desktop Title (Hidden on tiny mobile screens to avoid text overlapping the hamburger icon) */}
+        {/* Desktop Title */}
         <h2 className="text-lg font-semibold tracking-tight hidden sm:block dark:text-white text-black">
           Sales Monitoring System
         </h2>
@@ -208,10 +242,11 @@ export default function Navbar({
           <span className="sr-only">Toggle theme</span>
         </button>
 
-        <button className="p-2 rounded-full hover:bg-secondary transition-colors relative">
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive"></span>
-        </button>
+        {/* --- DYNAMIC NOTIFICATION BELL --- */}
+        {userId && role === "owner" && (
+          <NotificationBell userId={Number(userId)} />
+        )}
+        {/* --------------------------------- */}
 
         {/* User Profile Section */}
         <div className="flex items-center gap-3 border-l border-border/50 pl-4 sm:pl-5 ml-1">

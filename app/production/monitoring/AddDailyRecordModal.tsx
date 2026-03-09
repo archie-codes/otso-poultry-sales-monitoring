@@ -16,9 +16,8 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { useRouter, useSearchParams } from "next/navigation"; // NEW IMPORTS
+import { useRouter, useSearchParams } from "next/navigation";
 
-// SHADCN UI... (Keep all your existing UI imports)
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,7 +42,7 @@ export default function AddDailyRecordModal({
   activeLoads: any[];
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams(); // NEW
+  const searchParams = useSearchParams();
 
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -102,12 +101,10 @@ export default function AddDailyRecordModal({
       setLoadId("");
       setRecordDate(new Date());
 
-      // NEW: Push the new ID to the URL so the table can highlight it
       const params = new URLSearchParams(searchParams.toString());
       params.set("newId", String(result.newId));
-      params.set("page", "1"); // Ensure we go back to page 1 to see the new record
+      params.set("page", "1");
 
-      // We also clear any filters so the new record is guaranteed to be visible
       params.delete("farm");
       params.delete("building");
       params.delete("date");
@@ -138,7 +135,7 @@ export default function AddDailyRecordModal({
                     Daily Input
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Log mortality, feeds, and eggs for today.
+                    Log mortality and feeds for today.
                   </p>
                 </div>
                 <button
@@ -151,7 +148,6 @@ export default function AddDailyRecordModal({
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* COMBOBOX FOR ACTIVE LOADS (GROUPED BY FARM) */}
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                       Select Building *
@@ -190,8 +186,6 @@ export default function AddDailyRecordModal({
                             <CommandEmpty>
                               No active buildings found.
                             </CommandEmpty>
-
-                            {/* RENDER GROUPED LOADS */}
                             {Object.entries(groupedLoads).map(
                               ([farmName, loads]: [string, any]) => (
                                 <CommandGroup
@@ -237,7 +231,6 @@ export default function AddDailyRecordModal({
                     </Popover>
                   </div>
 
-                  {/* DATE PICKER */}
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                       Record Date *
@@ -274,8 +267,8 @@ export default function AddDailyRecordModal({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
-                  {/* MORTALITY */}
+                {/* CHANGED TO grid-cols-2 */}
+                <div className="grid grid-cols-2 gap-4 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-red-500">
                       Mortality (Head)
@@ -289,21 +282,6 @@ export default function AddDailyRecordModal({
                     />
                   </div>
 
-                  {/* EGG COUNT */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-yellow-600 dark:text-yellow-500">
-                      Egg Count
-                    </label>
-                    <Input
-                      type="number"
-                      name="eggCount"
-                      defaultValue={0}
-                      min="0"
-                      className="h-11 rounded-xl bg-background font-bold"
-                    />
-                  </div>
-
-                  {/* FEED CONSUMED (UPDATED UNIT) */}
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-600 dark:text-amber-500">
                       Feeds (Sacks)
@@ -320,7 +298,6 @@ export default function AddDailyRecordModal({
                   </div>
                 </div>
 
-                {/* REMARKS */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     Remarks / Notes

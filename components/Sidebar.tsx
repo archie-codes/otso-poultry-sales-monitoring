@@ -1,4 +1,6 @@
 "use client";
+
+import { useState } from "react";
 import {
   LayoutDashboard,
   TrendingDown,
@@ -7,6 +9,10 @@ import {
   Activity,
   Tractor,
   FileBarChart,
+  Archive,
+  Users,
+  ShieldAlert,
+  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -30,8 +36,27 @@ const HenIcon = ({ className }: { className?: string }) => {
   );
 };
 
-// 1. ADVANCED UX: Grouping items by business logic
-const ownerGroups = [
+// --- NEW: TypeScript Definitions ---
+type NavItem = {
+  name: string;
+  href?: string; // Optional (not needed if it has subItems)
+  icon: any;
+  subItems?: {
+    // Optional (only for dropdowns)
+    name: string;
+    href: string;
+    icon: any;
+  }[];
+};
+
+type NavGroup = {
+  label: string;
+  items: NavItem[];
+};
+// ----------------------------------
+
+// Apply the NavGroup type to our arrays
+const ownerGroups: NavGroup[] = [
   {
     label: "Operations",
     items: [
@@ -50,15 +75,25 @@ const ownerGroups = [
     items: [
       { name: "Expenses", href: "/expenses", icon: TrendingDown },
       { name: "Master Reports", href: "/reports", icon: FileBarChart },
+      { name: "Historical Ledger", href: "/reports/history", icon: Archive },
     ],
   },
   {
     label: "System",
-    items: [{ name: "Settings", href: "/settings", icon: Settings }],
+    items: [
+      {
+        name: "Settings",
+        icon: Settings,
+        subItems: [
+          { name: "User Management", href: "/settings", icon: Users },
+          { name: "System Logs", href: "/settings/logs", icon: ShieldAlert },
+        ],
+      },
+    ],
   },
 ];
 
-const staffGroups = [
+const staffGroups: NavGroup[] = [
   {
     label: "Farm Duties",
     items: [
@@ -76,11 +111,14 @@ export default function Sidebar({ role }: { role: string }) {
   const pathname = usePathname();
   const navGroups = role === "owner" ? ownerGroups : staffGroups;
 
+  const [isSettingsOpen, setIsSettingsOpen] = useState(
+    pathname.startsWith("/settings"),
+  );
+
   return (
     <div className="w-[260px] border-r border-border/40 bg-card hidden md:flex flex-col h-full shadow-sm z-20 transition-all duration-300">
       {/* Brand Header */}
       <div className="h-16 flex items-center px-6 border-b border-border/40 hover:bg-secondary/20 transition-colors cursor-pointer">
-        {/* Next.js Image Container */}
         <div className="relative h-8 w-8 mr-3 shrink-0 flex items-center justify-center">
           <Image
             src="/logo.png"
@@ -100,22 +138,83 @@ export default function Sidebar({ role }: { role: string }) {
       <div className="flex-1 py-6 flex flex-col gap-6 px-4 overflow-y-auto custom-scrollbar">
         {navGroups.map((group) => (
           <div key={group.label} className="flex flex-col gap-1">
-            {/* Tiny Category Header */}
             <h3 className="px-3 text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/70 mb-1">
               {group.label}
             </h3>
 
-            {/* The Links */}
             {group.items.map((item) => {
+              // IF THIS ITEM HAS SUB-ITEMS
+              if (item.subItems) {
+                const isAnySubActive = pathname.startsWith("/settings");
+
+                return (
+                  <div key={item.name} className="flex flex-col gap-1 mt-1">
+                    <button
+                      onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group w-full ${
+                        isAnySubActive
+                          ? "text-slate-900 font-bold dark:text-white"
+                          : "text-muted-foreground hover:bg-slate-50 hover:text-slate-900 font-medium dark:hover:bg-slate-800/50 dark:hover:text-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <item.icon className="h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110" />
+                        <span className="text-sm">{item.name}</span>
+                      </div>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform duration-200 ${
+                          isSettingsOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+
+                    {isSettingsOpen && (
+                      <div className="flex flex-col gap-1 pl-4 mt-1 border-l-2 border-border/50 ml-5 animate-in slide-in-from-top-2 fade-in duration-200">
+                        {item.subItems.map((subItem) => {
+                          const isStrictActive = pathname === subItem.href;
+                          return (
+                            <Link
+                              key={subItem.name}
+                              href={subItem.href}
+                              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group ${
+                                isStrictActive
+                                  ? "bg-slate-100 text-slate-900 font-bold dark:bg-slate-800 dark:text-white shadow-sm"
+                                  : "text-muted-foreground hover:text-slate-900 text-sm font-medium dark:hover:text-white"
+                              }`}
+                            >
+                              <subItem.icon
+                                className={`h-4 w-4 ${
+                                  isStrictActive
+                                    ? "text-slate-900 dark:text-white"
+                                    : ""
+                                }`}
+                              />
+                              <span className="text-[13px]">
+                                {subItem.name}
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // NORMAL ITEMS
+              // TypeScript now knows href is potentially undefined, so we use a fallback to safely check it
+              const itemHref = item.href || "";
               const isActive =
-                pathname === item.href || pathname.startsWith(item.href + "/");
+                pathname === itemHref ||
+                (pathname.startsWith(itemHref + "/") &&
+                  itemHref !== "/reports");
               const isStrictActive =
-                item.href === "/" ? pathname === "/" : isActive;
+                itemHref === "/" ? pathname === "/" : isActive;
 
               return (
                 <Link
                   key={item.name}
-                  href={item.href}
+                  href={itemHref}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
                     isStrictActive
                       ? "bg-slate-100 text-slate-900 font-bold dark:bg-slate-800 dark:text-white shadow-sm"
@@ -123,7 +222,9 @@ export default function Sidebar({ role }: { role: string }) {
                   }`}
                 >
                   <item.icon
-                    className={`h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110 ${isStrictActive ? "text-slate-900 dark:text-white" : ""}`}
+                    className={`h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110 ${
+                      isStrictActive ? "text-slate-900 dark:text-white" : ""
+                    }`}
                   />
                   <span className="text-sm">{item.name}</span>
                 </Link>

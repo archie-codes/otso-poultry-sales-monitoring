@@ -29,6 +29,9 @@ export default async function RootLayout({
   const name = session?.user?.name ?? "Farm Staff";
   const imageUrl = (session?.user as any)?.imageUrl ?? null;
 
+  // --- NEW: Extract the user ID ---
+  const userId = (session?.user as any)?.id ?? "";
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -44,7 +47,12 @@ export default async function RootLayout({
             {/* AppLayout acts as the primary wrapper for your sidebar and header.
                 Passing the session data here allows for immediate UI responsiveness.
             */}
-            <AppLayout role={role} userName={name} imageUrl={imageUrl}>
+            <AppLayout
+              role={role}
+              userName={name}
+              imageUrl={imageUrl}
+              userId={userId} // <-- NEW: Pass the ID into the layout!
+            >
               <main className="min-h-screen">{children}</main>
             </AppLayout>
           </AuthProvider>

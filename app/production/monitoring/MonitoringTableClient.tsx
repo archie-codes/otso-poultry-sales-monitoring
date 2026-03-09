@@ -40,12 +40,14 @@ export default function MonitoringTableClient({
   buildings,
   totalPages,
   currentPage,
+  userRole,
 }: {
   history: any[];
   farms: string[];
   buildings: string[];
   totalPages: number;
   currentPage: number;
+  userRole: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -58,7 +60,6 @@ export default function MonitoringTableClient({
       ? parseISO(selectedDateParam)
       : undefined;
 
-  // --- NEW: HIGHLIGHT LOGIC ---
   const newIdFromUrl = searchParams.get("newId");
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
@@ -66,7 +67,6 @@ export default function MonitoringTableClient({
     if (newIdFromUrl) {
       setHighlightedId(newIdFromUrl);
 
-      // After 3 seconds, remove the highlight state and silently clean the URL
       const timer = setTimeout(() => {
         setHighlightedId(null);
         const params = new URLSearchParams(window.location.search);
@@ -117,7 +117,6 @@ export default function MonitoringTableClient({
 
   return (
     <div className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm flex flex-col relative">
-      {/* TABLE HEADER & FILTERS */}
       <div className="px-6 py-5 border-b border-border/50 bg-slate-50/50 dark:bg-slate-900/20 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <h2 className="font-bold text-foreground text-lg shrink-0">
@@ -136,7 +135,6 @@ export default function MonitoringTableClient({
             </span>
           </div>
 
-          {/* DATE FILTER */}
           <div className="w-full sm:w-auto bg-white dark:bg-slate-950 rounded-xl border border-border focus-within:ring-2 ring-emerald-500/50 transition-shadow flex items-center pr-1 shrink-0">
             <Popover open={openDate} onOpenChange={setOpenDate}>
               <PopoverTrigger asChild>
@@ -185,7 +183,6 @@ export default function MonitoringTableClient({
             )}
           </div>
 
-          {/* FARM FILTER */}
           <div className="w-full sm:w-48 xl:w-56 bg-white dark:bg-slate-950 rounded-xl border border-border focus-within:ring-2 ring-emerald-500/50 transition-shadow shrink-0">
             <Popover open={openFarm} onOpenChange={setOpenFarm}>
               <PopoverTrigger asChild>
@@ -255,7 +252,6 @@ export default function MonitoringTableClient({
             </Popover>
           </div>
 
-          {/* BUILDING FILTER */}
           <div className="w-full sm:w-48 xl:w-56 bg-white dark:bg-slate-950 rounded-xl border border-border focus-within:ring-2 ring-emerald-500/50 transition-shadow shrink-0">
             <Popover open={openBuilding} onOpenChange={setOpenBuilding}>
               <PopoverTrigger asChild>
@@ -331,7 +327,6 @@ export default function MonitoringTableClient({
             </Popover>
           </div>
 
-          {/* RESET ALL FILTERS BUTTON */}
           {hasActiveFilters && (
             <Button
               variant="ghost"
@@ -346,7 +341,6 @@ export default function MonitoringTableClient({
         </div>
       </div>
 
-      {/* DATA TABLE */}
       <div
         className={cn(
           "overflow-x-auto custom-scrollbar min-h-[400px] transition-opacity duration-300 relative",
@@ -368,9 +362,6 @@ export default function MonitoringTableClient({
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 text-center whitespace-nowrap">
                 Feeds (Sacks)
               </th>
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500 text-center whitespace-nowrap">
-                Eggs
-              </th>
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground whitespace-nowrap">
                 Recorded By
               </th>
@@ -382,8 +373,9 @@ export default function MonitoringTableClient({
           <tbody className="divide-y divide-border/50">
             {history.length === 0 ? (
               <tr>
+                {/* CHANGED colSpan from 6 to 5 */}
                 <td
-                  colSpan={6}
+                  colSpan={5}
                   className="px-6 py-12 text-center text-muted-foreground font-semibold"
                 >
                   No daily records found for this filter.
@@ -395,7 +387,6 @@ export default function MonitoringTableClient({
                   key={record.id}
                   className={cn(
                     "group transition-colors duration-1000",
-                    // --- NEW: APPLY HIGHLIGHT CLASS IF THIS IS THE NEW RECORD ---
                     highlightedId === String(record.id)
                       ? "bg-emerald-100/60 dark:bg-emerald-900/40"
                       : "hover:bg-slate-50/50 dark:hover:bg-slate-900/20",
@@ -430,14 +421,11 @@ export default function MonitoringTableClient({
                       sacks
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center font-bold text-foreground">
-                    {Number(record.eggs)}
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-muted-foreground uppercase tracking-wider">
                     {record.staffName || "Unknown"}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <RecordActions record={record} />
+                    <RecordActions record={record} userRole={userRole} />
                   </td>
                 </tr>
               ))
@@ -446,7 +434,6 @@ export default function MonitoringTableClient({
         </table>
       </div>
 
-      {/* PAGINATION CONTROLS */}
       <div className="px-6 py-4 border-t border-border/50 bg-slate-50/30 dark:bg-slate-900/10 flex flex-col sm:flex-row items-center justify-between gap-4">
         <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
           Page {currentPage} of {totalPages || 1}

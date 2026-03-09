@@ -8,11 +8,13 @@ export default function AppLayout({
   role,
   userName,
   imageUrl,
+  userId, // <-- NEW: Added userId here
 }: {
   children: React.ReactNode;
   role: string;
   userName: string;
   imageUrl: string;
+  userId: string; // <-- NEW: Added to type definition
 }) {
   const pathname = usePathname();
   const isLogin = pathname === "/login";
@@ -25,7 +27,13 @@ export default function AppLayout({
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar role={role} />
       <div className="flex flex-col flex-1 overflow-hidden border-l border-border/40">
-        <Navbar userName={userName} role={role} imageUrl={imageUrl} />
+        {/* Pass the userId to the Navbar so the Bell works! */}
+        <Navbar
+          userId={userId}
+          userName={userName}
+          role={role}
+          imageUrl={imageUrl}
+        />
 
         {/* ADDED: A subtle canvas background to the main area! */}
         {/* In light mode it will be a soft gray, in dark mode it stays sleek. */}

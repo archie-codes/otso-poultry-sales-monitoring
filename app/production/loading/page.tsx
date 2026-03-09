@@ -2,8 +2,14 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "../../../src";
-import { loads, buildings, farms } from "../../../src/db/schema";
-import { eq, desc } from "drizzle-orm";
+import {
+  loads,
+  buildings,
+  farms,
+  dailyRecords,
+  harvestRecords,
+} from "../../../src/db/schema";
+import { eq, desc, asc } from "drizzle-orm";
 import { MapPin } from "lucide-react";
 import Image from "next/image";
 import henIcon from "@/public/hen.svg";
@@ -39,7 +45,7 @@ export default async function LoadingPage() {
     .innerJoin(farms, eq(buildings.farmId, farms.id));
 
   // 2. Fetch Active Loads
-  const activeLoads = await db
+  const activeLoadsRaw = await db
     .select({
       id: loads.id,
       buildingId: loads.buildingId,
@@ -48,6 +54,7 @@ export default async function LoadingPage() {
       quantity: loads.actualQuantityLoad,
       customer: loads.customerName,
       initialCapital: loads.initialCapital,
+      chickType: loads.chickType,
       buildingName: buildings.name,
       farmName: farms.name,
       province: farms.province,
@@ -57,15 +64,44 @@ export default async function LoadingPage() {
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
     .innerJoin(farms, eq(buildings.farmId, farms.id))
     .where(eq(loads.isActive, true))
-    .orderBy(desc(loads.loadDate), desc(loads.id));
+    .orderBy(
+      desc(loads.isActive),
+      asc(farms.name),
+      asc(buildings.name),
+      desc(loads.loadDate),
+    );
 
-  // 3. Filter out busy buildings
+  // 3. FETCH MORTALITY AND HARVESTS
+  const allDailyRecords = await db.select().from(dailyRecords);
+  const allHarvests = await db.select().from(harvestRecords);
+
+  // 4. MAP THE MATH INTO THE LOADS
+  const activeLoads = activeLoadsRaw.map((load) => {
+    const mortality = allDailyRecords
+      .filter((r) => r.loadId === load.id)
+      .reduce((sum, r) => sum + r.mortality, 0);
+
+    const harvested = allHarvests
+      .filter((h) => h.loadId === load.id)
+      .reduce((sum, h) => sum + h.quantity, 0);
+
+    const remaining = load.quantity - mortality - harvested;
+
+    return {
+      ...load,
+      mortality,
+      harvested,
+      remaining,
+    };
+  });
+
+  // 5. Filter out busy buildings
   const busyBuildingIds = activeLoads.map((load) => load.buildingId);
   const trulyAvailableBuildings = allBuildings.filter(
     (building) => !busyBuildingIds.includes(building.id),
   );
 
-  // 4. NESTED GROUPING: PROVINCE -> FARM
+  // 6. NESTED GROUPING: PROVINCE -> FARM
   const groupedByProvinceAndFarm = activeLoads.reduce(
     (acc, load) => {
       const province = load.province || "UNASSIGNED REGION";
@@ -129,7 +165,6 @@ export default async function LoadingPage() {
                   {Object.entries(farmsInProvince).map(
                     ([farmName, loadsInFarm]) => (
                       <div key={farmName} className="space-y-5">
-                        {/* FARM SUB-HEADER */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <div className="h-2 w-2 rounded-full bg-blue-500"></div>
@@ -142,12 +177,13 @@ export default async function LoadingPage() {
                           </div>
                         </div>
 
-                        {/* GRID OF CARDS FOR THIS SPECIFIC FARM */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 lg:gap-6">
+                        {/* --- THIS IS THE FIX: Changed from grid-cols-3 to a flex column --- */}
+                        <div className="flex flex-col gap-4 sm:gap-5">
                           {loadsInFarm.map((load) => (
                             <LoadCard key={load.id} load={load} />
                           ))}
                         </div>
+                        {/* ------------------------------------------------------------------ */}
                       </div>
                     ),
                   )}

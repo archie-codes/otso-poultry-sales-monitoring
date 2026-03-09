@@ -40,7 +40,6 @@ export async function addDailyRecord(formData: FormData) {
   const recordDate = formData.get("recordDate") as string;
   const mortality = Number(formData.get("mortality")) || 0;
   const feedsConsumed = (formData.get("feedsConsumed") as string) || "0";
-  const eggCount = Number(formData.get("eggCount")) || 0;
   const remarks = formData.get("remarks") as string;
 
   if (!loadId || !recordDate) {
@@ -48,7 +47,6 @@ export async function addDailyRecord(formData: FormData) {
   }
 
   try {
-    // FIXED: Use .returning() to grab the newly created ID
     const [newRecord] = await db
       .insert(dailyRecords)
       .values({
@@ -56,7 +54,6 @@ export async function addDailyRecord(formData: FormData) {
         recordDate,
         mortality,
         feedsConsumed,
-        eggCount,
         remarks: remarks || null,
         recordedBy: userId,
       })
@@ -65,7 +62,6 @@ export async function addDailyRecord(formData: FormData) {
     revalidatePath("/production/monitoring");
     revalidatePath("/reports");
 
-    // Pass the newId back to the frontend
     return { success: true, newId: newRecord.id };
   } catch (error) {
     console.error("Error saving daily record:", error);
@@ -73,13 +69,10 @@ export async function addDailyRecord(formData: FormData) {
   }
 }
 
-// Add these to your existing actions.ts
-
 export async function updateDailyRecord(id: number, formData: FormData) {
   try {
     const mortality = Number(formData.get("mortality")) || 0;
     const feedsConsumed = (formData.get("feedsConsumed") as string) || "0";
-    const eggCount = Number(formData.get("eggCount")) || 0;
     const remarks = formData.get("remarks") as string;
 
     await db
@@ -87,14 +80,12 @@ export async function updateDailyRecord(id: number, formData: FormData) {
       .set({
         mortality,
         feedsConsumed,
-        eggCount,
         remarks: remarks || null,
       })
       .where(eq(dailyRecords.id, id));
 
     revalidatePath("/production/monitoring");
 
-    // RETURN the ID here
     return { success: true, updatedId: id };
   } catch (error) {
     console.error("Update error:", error);

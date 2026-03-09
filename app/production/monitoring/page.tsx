@@ -26,13 +26,15 @@ export default async function DailyMonitoringPage(props: {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
+  const userRole = (session.user as any)?.role || "staff";
+
   const searchParams = await props.searchParams;
   const selectedFarm = searchParams?.farm;
   const selectedBuilding = searchParams?.building;
-  const selectedDate = searchParams?.date; // NEW: Capture the date param
+  const selectedDate = searchParams?.date;
 
   const currentPage = Number(searchParams?.page) || 1;
-  const ITEMS_PER_PAGE = 12;
+  const ITEMS_PER_PAGE = 10;
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
   // 1. Fetch Active Loads (For the Add Record Modal dropdown)
@@ -84,12 +86,10 @@ export default async function DailyMonitoringPage(props: {
     filterConditions.push(eq(buildings.name, selectedBuilding));
   }
 
-  // NEW: Add date exact match filter
   if (selectedDate && selectedDate !== "all") {
     filterConditions.push(eq(dailyRecords.recordDate, selectedDate));
   }
 
-  // Combine conditions using 'and()' if they exist
   const finalCondition =
     filterConditions.length > 0 ? and(...filterConditions) : undefined;
 
@@ -105,14 +105,13 @@ export default async function DailyMonitoringPage(props: {
   const totalItems = Number(countQuery[0].count);
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
-  // 5. Fetch the Paginated & Filtered History
+  // 5. Fetch the Paginated & Filtered History (Eggs Removed)
   const history = await db
     .select({
       id: dailyRecords.id,
       date: dailyRecords.recordDate,
       mortality: dailyRecords.mortality,
       feeds: dailyRecords.feedsConsumed,
-      eggs: dailyRecords.eggCount,
       remarks: dailyRecords.remarks,
       staffName: users.name,
       buildingName: buildings.name,
@@ -124,7 +123,6 @@ export default async function DailyMonitoringPage(props: {
     .innerJoin(farms, eq(buildings.farmId, farms.id))
     .leftJoin(users, eq(dailyRecords.recordedBy, users.id))
     .where(finalCondition)
-    // --- UPDATED SORTING LOGIC HERE ---
     .orderBy(desc(dailyRecords.recordDate), desc(dailyRecords.id))
     .limit(ITEMS_PER_PAGE)
     .offset(offset);
@@ -139,7 +137,7 @@ export default async function DailyMonitoringPage(props: {
             Daily Monitoring
           </h1>
           <p className="text-muted-foreground font-medium mt-2">
-            Log mortality, feed consumption, and egg production.
+            Log mortality and feed consumption.
           </p>
         </div>
         <div className="shrink-0">
@@ -153,6 +151,7 @@ export default async function DailyMonitoringPage(props: {
         buildings={availableBuildingsForFilter}
         totalPages={totalPages}
         currentPage={currentPage}
+        userRole={userRole}
       />
     </div>
   );

@@ -14,6 +14,15 @@ export default async function DashboardPage(props: {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
+  // --- THE TRAFFIC COP (SECURITY CHECK) ---
+  const userRole = (session.user as any)?.role || "staff";
+
+  if (userRole !== "owner") {
+    // Instantly teleport staff to their workspace so they never see the financials
+    redirect("/production/monitoring");
+  }
+  // ----------------------------------------
+
   const searchParams = await props.searchParams;
   const selectedProvince = searchParams?.province;
   const selectedFarm = searchParams?.farm;
@@ -90,7 +99,7 @@ export default async function DashboardPage(props: {
     (l) => !l.initialCapital || Number(l.initialCapital) === 0,
   ).length;
 
-  // --- NEW: INFRASTRUCTURE METRICS ---
+  // --- INFRASTRUCTURE METRICS ---
   const totalFarmsCount = filteredFarms.length;
   // A building is active if its ID appears in the filtered active loads
   const activeBuildingIds = new Set(filteredLoads.map((l) => l.buildingId));
