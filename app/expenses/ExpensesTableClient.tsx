@@ -13,13 +13,14 @@ import {
   Check,
   ChevronsUpDown,
   Building2,
+  Home, // <-- Added Home icon for building
   PieChart,
   ChevronDown,
 } from "lucide-react";
-import { format, parseISO, startOfMonth } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar"; // USED NOW!
+import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
@@ -48,11 +49,13 @@ const categories = [
 export default function ExpensesTableClient({
   history,
   farms,
+  buildings, // <-- ADDED BUILDINGS PROP
   totalPages,
   currentPage,
 }: {
   history: any[];
   farms: string[];
+  buildings: string[]; // <-- ADDED BUILDINGS TYPE
   totalPages: number;
   currentPage: number;
 }) {
@@ -61,27 +64,33 @@ export default function ExpensesTableClient({
   const [isPending, startTransition] = useTransition();
 
   const [openFarm, setOpenFarm] = useState(false);
+  const [openBuilding, setOpenBuilding] = useState(false); // <-- ADDED
   const [openCat, setOpenCat] = useState(false);
   const [openDate, setOpenDate] = useState(false);
 
   const selectedFarm = searchParams.get("farm") || "all";
+  const selectedBuilding = searchParams.get("building") || "all"; // <-- ADDED
   const selectedType = searchParams.get("type") || "all";
   const selectedMonthParam = searchParams.get("month");
 
-  // Convert string param back to a Date object for the Calendar component
   const dateValue = selectedMonthParam
     ? parseISO(`${selectedMonthParam}-01`)
     : undefined;
 
   const hasActiveFilters =
-    selectedFarm !== "all" || selectedType !== "all" || !!selectedMonthParam;
+    selectedFarm !== "all" ||
+    selectedBuilding !== "all" ||
+    selectedType !== "all" ||
+    !!selectedMonthParam;
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value === "all" || value === "") {
       params.delete(key);
+      if (key === "farm") params.delete("building"); // Reset building if farm changes
     } else {
       params.set(key, value);
+      if (key === "farm") params.delete("building"); // Reset building if farm changes
     }
     params.set("page", "1");
     startTransition(() => {
@@ -107,9 +116,8 @@ export default function ExpensesTableClient({
     <div className="bg-card border border-border/50 rounded-[2rem] overflow-hidden shadow-sm flex flex-col relative">
       {/* 1. PREMIUM FILTER BAR */}
       <div className="px-6 py-5 border-b border-border/50 bg-slate-50/50 dark:bg-slate-900/20 flex flex-col lg:flex-row lg:items-center justify-between gap-4 lg:gap-6 flex-wrap">
-        {/* TITLE AREA */}
         <div className="flex items-center gap-3 shrink-0">
-          <h2 className="font-bold text-foreground text-lg">
+          <h2 className="font-bold text-foreground text-lg uppercase tracking-tight">
             Transaction History
           </h2>
           {isPending && (
@@ -117,29 +125,21 @@ export default function ExpensesTableClient({
           )}
         </div>
 
-        {/* FILTER CONTROLS */}
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto lg:justify-end">
-          <div className="flex items-center text-muted-foreground mr-1 shrink-0 px-2 sm:flex">
-            <Filter className="w-4 h-4 mr-2 text-red-500" />
-            <span className="text-[10px] font-black uppercase tracking-widest">
-              Filters
-            </span>
-          </div>
-
-          {/* 📅 PREMIUM MONTH PICKER */}
-          <div className="w-full sm:w-[170px] bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 focus-within:ring-2 ring-red-500/20 transition-all flex items-center pr-1">
+          {/* 📅 MONTH PICKER */}
+          <div className="w-full sm:w-[150px] bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 focus-within:ring-2 ring-red-500/20 transition-all flex items-center pr-1">
             <Popover open={openDate} onOpenChange={setOpenDate}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-between h-11 px-4 font-bold uppercase tracking-wider text-xs",
+                    "w-full justify-between h-11 px-4 font-bold uppercase tracking-wider text-[10px]",
                     !selectedMonthParam && "text-slate-400",
                   )}
                 >
                   <div className="flex items-center truncate">
                     <CalendarIcon className="w-3.5 h-3.5 mr-2 shrink-0" />
-                    {dateValue ? format(dateValue, "MMMM yyyy") : "DATE"}
+                    {dateValue ? format(dateValue, "MMM yyyy") : "DATE"}
                   </div>
                   <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                 </Button>
@@ -162,7 +162,6 @@ export default function ExpensesTableClient({
                 />
               </PopoverContent>
             </Popover>
-
             {selectedMonthParam && (
               <button
                 onClick={() => updateFilter("month", "all")}
@@ -174,12 +173,12 @@ export default function ExpensesTableClient({
           </div>
 
           {/* FARM COMBOBOX */}
-          <div className="w-full sm:w-[170px] bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 focus-within:ring-2 ring-red-500/20 transition-all">
+          <div className="w-full sm:w-[150px] bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 focus-within:ring-2 ring-red-500/20 transition-all">
             <Popover open={openFarm} onOpenChange={setOpenFarm}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full justify-between h-11 px-4 font-bold uppercase tracking-wider text-xs"
+                  className="w-full justify-between h-11 px-4 font-bold uppercase tracking-wider text-[10px]"
                 >
                   <div className="flex items-center truncate">
                     <Building2 className="w-3.5 h-3.5 mr-2 shrink-0 text-slate-400" />
@@ -210,13 +209,12 @@ export default function ExpensesTableClient({
                               ? "opacity-100"
                               : "opacity-0",
                           )}
-                        />
+                        />{" "}
                         ALL FARMS
                       </CommandItem>
                       {farms.map((f) => (
                         <CommandItem
                           key={f}
-                          value={f}
                           onSelect={() => {
                             updateFilter("farm", f);
                             setOpenFarm(false);
@@ -228,7 +226,7 @@ export default function ExpensesTableClient({
                               "mr-2 h-3.5 w-3.5",
                               selectedFarm === f ? "opacity-100" : "opacity-0",
                             )}
-                          />
+                          />{" "}
                           {f}
                         </CommandItem>
                       ))}
@@ -239,13 +237,85 @@ export default function ExpensesTableClient({
             </Popover>
           </div>
 
+          {/* BUILDING COMBOBOX (NEW) */}
+          <div className="w-full sm:w-[150px] bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 focus-within:ring-2 ring-red-500/20 transition-all">
+            <Popover open={openBuilding} onOpenChange={setOpenBuilding}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  disabled={selectedFarm === "all"}
+                  className="w-full justify-between h-11 px-4 font-bold uppercase tracking-wider text-[10px] disabled:opacity-50"
+                >
+                  <div className="flex items-center truncate">
+                    <Home className="w-3.5 h-3.5 mr-2 shrink-0 text-slate-400" />
+                    {selectedFarm === "all"
+                      ? "SELECT FARM"
+                      : selectedBuilding === "all"
+                        ? "ALL BLDGS"
+                        : selectedBuilding}
+                  </div>
+                  <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0 rounded-xl shadow-xl border-border">
+                <Command>
+                  <CommandInput placeholder="Search building..." />
+                  <CommandList className="max-h-[250px]">
+                    <CommandEmpty className="py-4 text-xs text-center">
+                      No building found.
+                    </CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        onSelect={() => {
+                          updateFilter("building", "all");
+                          setOpenBuilding(false);
+                        }}
+                        className="text-xs font-bold uppercase cursor-pointer py-2.5"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-3.5 w-3.5",
+                            selectedBuilding === "all"
+                              ? "opacity-100"
+                              : "opacity-0",
+                          )}
+                        />{" "}
+                        ALL BUILDINGS
+                      </CommandItem>
+                      {buildings.map((b) => (
+                        <CommandItem
+                          key={b}
+                          onSelect={() => {
+                            updateFilter("building", b);
+                            setOpenBuilding(false);
+                          }}
+                          className="text-xs font-bold uppercase cursor-pointer py-2.5"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-3.5 w-3.5",
+                              selectedBuilding === b
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />{" "}
+                          {b}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
           {/* CATEGORY COMBOBOX */}
-          <div className="w-full sm:w-[170px] bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 focus-within:ring-2 ring-red-500/20 transition-all">
+          <div className="w-full sm:w-[150px] bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 focus-within:ring-2 ring-red-500/20 transition-all">
             <Popover open={openCat} onOpenChange={setOpenCat}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="w-full justify-between h-11 px-4 font-bold uppercase tracking-wider text-xs"
+                  className="w-full justify-between h-11 px-4 font-bold uppercase tracking-wider text-[10px]"
                 >
                   <div className="flex items-center truncate">
                     <PieChart className="w-3.5 h-3.5 mr-2 shrink-0 text-slate-400" />
@@ -264,7 +334,7 @@ export default function ExpensesTableClient({
                           updateFilter("type", "all");
                           setOpenCat(false);
                         }}
-                        className="text-xs font-bold uppercase cursor-pointer py-2.5"
+                        className="text-[10px] font-bold uppercase cursor-pointer py-2.5"
                       >
                         <Check
                           className={cn(
@@ -273,18 +343,17 @@ export default function ExpensesTableClient({
                               ? "opacity-100"
                               : "opacity-0",
                           )}
-                        />
+                        />{" "}
                         ALL CATEGORIES
                       </CommandItem>
                       {categories.map((cat) => (
                         <CommandItem
                           key={cat.value}
-                          value={cat.value}
                           onSelect={() => {
                             updateFilter("type", cat.value);
                             setOpenCat(false);
                           }}
-                          className="text-xs font-bold uppercase cursor-pointer py-2.5"
+                          className="text-[10px] font-bold uppercase cursor-pointer py-2.5"
                         >
                           <Check
                             className={cn(
@@ -293,7 +362,7 @@ export default function ExpensesTableClient({
                                 ? "opacity-100"
                                 : "opacity-0",
                             )}
-                          />
+                          />{" "}
                           {cat.label}
                         </CommandItem>
                       ))}
@@ -317,10 +386,10 @@ export default function ExpensesTableClient({
         </div>
       </div>
 
-      {/* 2. TABLE (Slightly improved padding and typography) */}
+      {/* 2. TABLE */}
       <div
         className={cn(
-          "overflow-x-auto custom-scrollbar transition-opacity duration-300",
+          "overflow-x-auto custom-scrollbar transition-opacity duration-300 min-h-[400px]",
           isPending && "opacity-50 pointer-events-none",
         )}
       >
@@ -360,17 +429,17 @@ export default function ExpensesTableClient({
                   key={record.id}
                   className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20 transition-colors group"
                 >
-                  <td className="px-6 py-4 whitespace-nowrap font-semibold">
+                  <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900 dark:text-slate-100">
                     {format(new Date(record.date), "MMM d, yyyy")}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-black text-foreground block">
+                    <span className="font-black text-foreground block uppercase text-xs">
                       {record.farmName}
                     </span>
-                    <span className="block text-[11px] font-bold uppercase tracking-widest mt-1">
+                    <span className="block text-[10px] font-bold uppercase tracking-widest mt-1">
                       {record.buildingName ? (
                         <span className="text-slate-500 dark:text-slate-400">
-                          Direct: {record.buildingName}
+                          {record.buildingName}
                         </span>
                       ) : (
                         <span className="text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded flex items-center gap-1.5 w-fit">
@@ -380,7 +449,7 @@ export default function ExpensesTableClient({
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <span className="bg-slate-100 dark:bg-slate-800 border border-border/50 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-widest text-foreground">
+                    <span className="bg-slate-100 dark:bg-slate-800 border border-border/50 px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest text-foreground">
                       {record.type}
                     </span>
                   </td>
@@ -410,7 +479,7 @@ export default function ExpensesTableClient({
             size="sm"
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage <= 1 || isPending}
-            className="h-9 px-4 rounded-xl font-bold border-border hover:bg-slate-50 shadow-sm transition-all active:scale-95"
+            className="h-9 px-4 rounded-xl font-bold border-border hover:bg-slate-50 shadow-sm transition-all text-[10px] uppercase tracking-widest"
           >
             <ChevronLeft className="w-4 h-4 mr-1" /> Prev
           </Button>
@@ -419,7 +488,7 @@ export default function ExpensesTableClient({
             size="sm"
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage >= totalPages || isPending}
-            className="h-9 px-4 rounded-xl font-bold border-border hover:bg-slate-50 shadow-sm transition-all active:scale-95"
+            className="h-9 px-4 rounded-xl font-bold border-border hover:bg-slate-50 shadow-sm transition-all text-[10px] uppercase tracking-widest"
           >
             Next <ChevronRight className="w-4 h-4 ml-1" />
           </Button>

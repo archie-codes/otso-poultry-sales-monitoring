@@ -110,9 +110,15 @@ export default function EditLoadModal({
     const result = await updateLoad(formData);
 
     if (result?.error) {
-      toast.error("Update Failed", { description: result.error });
+      toast.error("Update Failed", {
+        description: result.error,
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
     } else {
-      toast.success("Load details updated successfully!");
+      toast.success("Success!", {
+        description: "Load details saved and building activated.",
+        style: { backgroundColor: "blue", color: "white", border: "none" },
+      });
       setIsOpen(false);
       if (onSuccess) onSuccess();
     }
@@ -314,7 +320,7 @@ export default function EditLoadModal({
               <FormattedNumberInput
                 name="sellingPrice"
                 allowDecimals={true}
-                defaultValue={load.sellingPrice}
+                defaultValue={load.sellingPrice?.toString() || ""}
                 placeholder="210.00"
                 className="h-11 rounded-xl bg-background font-bold"
               />

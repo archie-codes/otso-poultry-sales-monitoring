@@ -11,6 +11,7 @@ import {
   Check,
   ChevronsUpDown,
   ChevronDown,
+  MapPin, // Added for the Farm icon
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths } from "date-fns";
@@ -18,8 +19,8 @@ import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
 // SHADCN UI
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -75,21 +76,23 @@ export default function AddLoadModal({
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  // --- NEW: CASCADING SELECTION STATES ---
+  const [selectedFarm, setSelectedFarm] = useState("");
+  const [openFarmSearch, setOpenFarmSearch] = useState(false);
+
   const [buildingId, setBuildingId] = useState("");
   const [openBuildingSearch, setOpenBuildingSearch] = useState(false);
+
   const [chickType, setChickType] = useState("");
   const [openChickType, setOpenChickType] = useState(false);
 
   const [loadDate, setLoadDate] = useState<Date | undefined>(new Date());
-
-  // --- FIXED: DEFAULT HARVEST IS NOW 4 MONTHS AHEAD ---
   const [harvestDate, setHarvestDate] = useState<Date | undefined>(
     addMonths(new Date(), 4),
   );
 
   useEffect(() => {
     setMounted(true);
-    // Accessibility: Close on ESC key
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") setIsOpen(false);
     };
@@ -97,13 +100,23 @@ export default function AddLoadModal({
     return () => window.removeEventListener("keydown", handleEsc);
   }, []);
 
+  // --- NEW: SMART FILTERING LOGIC ---
+  // 1. Extract a unique list of Farms from the available buildings
+  const uniqueFarms = Array.from(
+    new Set(availableBuildings.map((b) => b.farmName)),
+  );
+
+  // 2. Filter the buildings based on the selected farm
+  const filteredBuildings = selectedFarm
+    ? availableBuildings.filter((b) => b.farmName === selectedFarm)
+    : [];
+
   const selectedBuilding = availableBuildings.find(
     (b) => String(b.id) === buildingId,
   );
 
   function handleLoadDateChange(date: Date | undefined) {
     setLoadDate(date);
-    // --- FIXED: IF THEY CHANGE LOAD DATE, AUTO-SHIFT HARVEST TO 4 MONTHS LATER ---
     if (date) setHarvestDate(addMonths(date, 4));
   }
 
@@ -119,26 +132,40 @@ export default function AddLoadModal({
 
     setLoading(true);
     const formData = new FormData(e.currentTarget);
+
+    // Inject our state variables into the form data
     formData.set("buildingId", buildingId);
     formData.set("chickType", chickType);
-    formData.set("loadDate", format(loadDate!, "yyyy-MM-dd"));
-
-    if (harvestDate) {
+    if (loadDate) formData.set("loadDate", format(loadDate, "yyyy-MM-dd"));
+    if (harvestDate)
       formData.set("harvestDate", format(harvestDate, "yyyy-MM-dd"));
-    }
+
+    // --- NEW: SAFELY STRIP COMMAS BEFORE SENDING TO DB ---
+    const qty = formData.get("actualQuantityLoad") as string;
+    if (qty) formData.set("actualQuantityLoad", qty.replace(/,/g, ""));
+
+    const sp = formData.get("sellingPrice") as string;
+    if (sp) formData.set("sellingPrice", sp.replace(/,/g, ""));
+
+    const cap = formData.get("initialCapital") as string;
+    if (cap) formData.set("initialCapital", cap.replace(/,/g, ""));
+    // -----------------------------------------------------
 
     const result = await addLoad(formData);
 
     if (result.error) {
       toast.error("Error", {
         description: result.error,
+        style: { backgroundColor: "red", color: "white", border: "none" },
       });
     } else {
       toast.success("Success!", {
         description: "Load details saved and building activated.",
+        style: { backgroundColor: "blue", color: "white", border: "none" },
       });
 
       setIsOpen(false);
+      setSelectedFarm("");
       setBuildingId("");
       setChickType("");
 
@@ -173,7 +200,8 @@ export default function AddLoadModal({
                     New Load Entry
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    Select an empty building and set the batch details.
+                    Select a Farm, choose an available Building, and set batch
+                    details.
                   </p>
                 </div>
                 <button
@@ -185,80 +213,146 @@ export default function AddLoadModal({
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    Select Building *
-                  </label>
-                  <Popover
-                    open={openBuildingSearch}
-                    onOpenChange={setOpenBuildingSearch}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className="w-full h-14 justify-between rounded-xl bg-background border-input px-4"
-                      >
-                        {selectedBuilding ? (
-                          <div className="flex flex-col items-start gap-0.5 overflow-hidden text-left">
-                            <span className="font-bold text-sm truncate">
-                              {selectedBuilding.farmName} —{" "}
-                              {selectedBuilding.name}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-tight">
-                              {selectedBuilding.barangay},{" "}
-                              {selectedBuilding.city}
+                {/* --- TWO-STEP CASCADING DROPDOWNS --- */}
+                <div className="grid md:grid-cols-2 gap-5 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
+                  {/* STEP 1: SELECT FARM */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      1. Select Farm *
+                    </label>
+                    <Popover
+                      open={openFarmSearch}
+                      onOpenChange={setOpenFarmSearch}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full h-12 justify-between rounded-xl bg-background border-input px-4 font-normal"
+                        >
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <MapPin className="h-4 w-4 text-blue-600 shrink-0" />
+                            <span className="truncate font-bold text-sm">
+                              {selectedFarm || "Choose a Farm..."}
                             </span>
                           </div>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            Search by Farm or Building...
-                          </span>
-                        )}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200 shadow-xl">
-                      <Command>
-                        <CommandInput placeholder="Type building or farm name..." />
-                        <CommandList className="max-h-[300px]">
-                          <CommandEmpty>
-                            No available buildings found.
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {availableBuildings.map((b) => (
-                              <CommandItem
-                                key={b.id}
-                                value={`${b.farmName} ${b.name} ${b.city}`}
-                                onSelect={() => {
-                                  setBuildingId(String(b.id));
-                                  setOpenBuildingSearch(false);
-                                }}
-                                className="py-3 px-4"
-                              >
-                                <div className="flex flex-col items-start gap-0.5">
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200 shadow-xl">
+                        <Command>
+                          <CommandInput placeholder="Search farm..." />
+                          <CommandList className="max-h-[200px]">
+                            <CommandEmpty>No farms available.</CommandEmpty>
+                            <CommandGroup>
+                              {uniqueFarms.map((farm) => (
+                                <CommandItem
+                                  key={farm}
+                                  value={farm}
+                                  onSelect={(currentValue) => {
+                                    const actualFarm =
+                                      uniqueFarms.find(
+                                        (f) =>
+                                          f.toLowerCase() ===
+                                          currentValue.toLowerCase(),
+                                      ) || currentValue;
+
+                                    setSelectedFarm(actualFarm);
+                                    // Reset building when farm changes
+                                    setBuildingId("");
+                                    setOpenFarmSearch(false);
+                                  }}
+                                  className="py-3 px-4"
+                                >
                                   <span className="font-bold text-sm">
-                                    {b.farmName} — {b.name}
+                                    {farm}
                                   </span>
-                                  <span className="text-[10px] text-muted-foreground uppercase">
-                                    {b.barangay}, {b.city}
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4 text-blue-600",
+                                      selectedFarm === farm
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* STEP 2: SELECT BUILDING */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      2. Select Building *
+                    </label>
+                    <Popover
+                      open={openBuildingSearch}
+                      onOpenChange={setOpenBuildingSearch}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          disabled={!selectedFarm} // Disabled until Farm is picked!
+                          className="w-full h-12 justify-between rounded-xl bg-background border-input px-4 font-normal disabled:opacity-50"
+                        >
+                          {selectedBuilding ? (
+                            <div className="flex flex-col items-start gap-0.5 overflow-hidden text-left">
+                              <span className="font-bold text-sm truncate">
+                                {selectedBuilding.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {selectedFarm
+                                ? "Choose a Building..."
+                                : "Pick a Farm first"}
+                            </span>
+                          )}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200 shadow-xl">
+                        <Command>
+                          <CommandInput placeholder="Search building..." />
+                          <CommandList className="max-h-[200px]">
+                            <CommandEmpty>
+                              No empty buildings found.
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {filteredBuildings.map((b) => (
+                                <CommandItem
+                                  key={b.id}
+                                  value={b.name}
+                                  onSelect={() => {
+                                    setBuildingId(String(b.id));
+                                    setOpenBuildingSearch(false);
+                                  }}
+                                  className="py-3 px-4"
+                                >
+                                  <span className="font-bold text-sm">
+                                    {b.name}
                                   </span>
-                                </div>
-                                <Check
-                                  className={cn(
-                                    "ml-auto h-4 w-4",
-                                    buildingId === String(b.id)
-                                      ? "opacity-100"
-                                      : "opacity-0",
-                                  )}
-                                />
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4 text-blue-600",
+                                      buildingId === String(b.id)
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-5">
@@ -281,11 +375,19 @@ export default function AddLoadModal({
                           <ChevronDown className="h-4 w-4 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 z-200">
+                      <PopoverContent
+                        className="w-auto p-0 z-200"
+                        align="start"
+                      >
                         <Calendar
                           mode="single"
                           selected={loadDate}
-                          onSelect={handleLoadDateChange}
+                          onSelect={(date) => {
+                            handleLoadDateChange(date);
+                            // Auto-close calendar hack if you want it!
+                            // document.body.click();
+                          }}
+                          initialFocus
                         />
                       </PopoverContent>
                     </Popover>
@@ -313,11 +415,15 @@ export default function AddLoadModal({
                           <ChevronDown className="h-4 w-4 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 z-200">
+                      <PopoverContent
+                        className="w-auto p-0 z-200"
+                        align="start"
+                      >
                         <Calendar
                           mode="single"
                           selected={harvestDate}
                           onSelect={setHarvestDate}
+                          initialFocus
                         />
                       </PopoverContent>
                     </Popover>
@@ -339,8 +445,10 @@ export default function AddLoadModal({
                           role="combobox"
                           className="w-full h-12 justify-between rounded-xl font-normal border-input px-4"
                         >
-                          {chickType || "Select breed..."}
-                          <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                          <span className="truncate">
+                            {chickType || "Select breed..."}
+                          </span>
+                          <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
@@ -445,7 +553,10 @@ export default function AddLoadModal({
                     className="h-12 px-10 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
                   >
                     {loading ? (
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Save &
+                        Activate Load
+                      </>
                     ) : (
                       <>
                         <Save className="mr-2 h-5 w-5" /> Save & Activate Load

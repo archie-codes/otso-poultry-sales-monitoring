@@ -29,10 +29,14 @@ export default function AddBuildingModal({
     const result = await addBuilding(formData);
 
     if (result.error) {
-      toast.error("Failed to add building", { description: result.error });
+      toast.error("Failed to add building", {
+        description: result.error,
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
     } else {
       toast.success("Building Added!", {
         description: `New building added to ${farmName}.`,
+        style: { backgroundColor: "blue", color: "white", border: "none" },
       });
       setIsOpen(false);
     }

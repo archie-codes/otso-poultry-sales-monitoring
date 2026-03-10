@@ -9,20 +9,20 @@ import AddExpenseModal from "./AddExpenseModal";
 import ExpensesTableClient from "./ExpensesTableClient";
 
 export default async function ExpensesPage(props: {
-  searchParams:
-    | Promise<{
-        farm?: string;
-        type?: string;
-        month?: string;
-        page?: string;
-      }>
-    | { farm?: string; type?: string; month?: string; page?: string };
+  searchParams: Promise<{
+    farm?: string;
+    building?: string; // <-- ADDED BUILDING PARAM
+    type?: string;
+    month?: string;
+    page?: string;
+  }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
   const searchParams = await props.searchParams;
   const selectedFarm = searchParams?.farm;
+  const selectedBuilding = searchParams?.building; // <-- ADDED
   const selectedType = searchParams?.type;
   const selectedMonth = searchParams?.month;
 
@@ -31,6 +31,7 @@ export default async function ExpensesPage(props: {
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
   const allFarms = await db.select().from(farms);
+
   const activeLoads = await db
     .select({
       id: loads.id,
@@ -42,9 +43,36 @@ export default async function ExpensesPage(props: {
     .innerJoin(farms, eq(buildings.farmId, farms.id))
     .where(eq(loads.isActive, true));
 
+  // --- NEW: FETCH INFRASTRUCTURE FOR THE CASCADING FILTER ---
+  const infrastructure = await db
+    .select({
+      farmName: farms.name,
+      buildingName: buildings.name,
+    })
+    .from(buildings)
+    .innerJoin(farms, eq(buildings.farmId, farms.id));
+
+  const uniqueFarmsList = Array.from(new Set(allFarms.map((f) => f.name)));
+
+  // Only show buildings that belong to the selected farm
+  const availableBuildingsForFilter =
+    selectedFarm && selectedFarm !== "all"
+      ? Array.from(
+          new Set(
+            infrastructure
+              .filter((i) => i.farmName === selectedFarm)
+              .map((i) => i.buildingName),
+          ),
+        )
+      : [];
+  // ---------------------------------------------------------
+
   const filters = [];
   if (selectedFarm && selectedFarm !== "all") {
     filters.push(eq(farms.name, selectedFarm));
+  }
+  if (selectedBuilding && selectedBuilding !== "all") {
+    filters.push(eq(buildings.name, selectedBuilding)); // <-- ADDED BUILDING FILTER
   }
   if (selectedType && selectedType !== "all") {
     filters.push(eq(expenses.expenseType, selectedType as any));
@@ -97,6 +125,8 @@ export default async function ExpensesPage(props: {
     })
     .from(expenses)
     .innerJoin(farms, eq(expenses.farmId, farms.id))
+    .leftJoin(loads, eq(expenses.loadId, loads.id)) // Joined load
+    .leftJoin(buildings, eq(loads.buildingId, buildings.id)) // Joined buildings for KPI accuracy
     .where(finalCondition);
 
   const totalAmount = allFilteredDataForKPIs.reduce(
@@ -121,18 +151,16 @@ export default async function ExpensesPage(props: {
     }
   });
 
-  const uniqueFarmsList = Array.from(new Set(allFarms.map((f) => f.name)));
-
   const formatMoney = (amount: number) =>
     `₱${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto pb-12 px-4 sm:px-6 lg:px-8 py-8">
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 bg-card border border-border/50 p-6 lg:p-8 rounded-3xl shadow-sm relative overflow-hidden">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 bg-card border border-border/50 p-6 lg:p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/10 rounded-full blur-3xl -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
         <div>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight flex items-center gap-3 text-foreground">
+          <h1 className="text-3xl sm:text-3xl font-black tracking-tight flex items-center gap-3 text-foreground uppercase">
             <TrendingDown className="h-9 w-9 sm:h-10 sm:w-10 text-red-500 shrink-0" />
             Financial Ledger
           </h1>
@@ -146,7 +174,7 @@ export default async function ExpensesPage(props: {
         </div>
       </div>
 
-      {/* KPI CARDS (FIXED WITH TRUNCATE) */}
+      {/* KPI CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-card border border-border/50 p-6 rounded-3xl shadow-sm flex items-center gap-4">
           <div className="p-4 bg-red-50 dark:bg-red-950/30 text-red-500 rounded-2xl shrink-0">
@@ -156,7 +184,6 @@ export default async function ExpensesPage(props: {
             <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground truncate">
               Total Filtered Expenses
             </p>
-            {/* TWEAKED: Changed text-3xl to text-2xl and added tracking-tighter */}
             <p
               className="text-xl sm:text-2xl font-black tracking-tighter text-foreground truncate"
               title={formatMoney(totalAmount)}
@@ -208,6 +235,7 @@ export default async function ExpensesPage(props: {
       <ExpensesTableClient
         history={history}
         farms={uniqueFarmsList}
+        buildings={availableBuildingsForFilter} // <-- PASSED TO CLIENT
         totalPages={totalPages}
         currentPage={currentPage}
       />

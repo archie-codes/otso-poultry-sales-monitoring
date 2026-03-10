@@ -20,7 +20,7 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
-  CheckCircle2, // <-- Added the Check icon here
+  CheckCircle2,
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -41,7 +41,7 @@ export default async function HistoryPage() {
       sellingPrice: loads.sellingPrice,
       initialCapital: loads.initialCapital,
       loadDate: loads.loadDate,
-      harvestDate: loads.harvestDate,
+      harvestDate: loads.harvestDate, // <--- This is the TARGET date
       customerName: loads.customerName,
       isActive: loads.isActive,
     })
@@ -73,6 +73,13 @@ export default async function HistoryPage() {
       0,
     );
 
+    // --- THE FIX: GET THE ACTUAL HARVEST DATE FROM THE HARVEST RECORDS TABLE ---
+    // If there are multiple harvest days, we grab the date of the final harvest
+    const actualHarvestDate =
+      loadHarvests.length > 0
+        ? loadHarvests[loadHarvests.length - 1].harvestDate
+        : load.harvestDate;
+
     const avgSellingPrice =
       actualHarvest > 0 ? totalRtlAmount / actualHarvest : 0;
     const percentHarvest =
@@ -88,8 +95,8 @@ export default async function HistoryPage() {
 
     // --- SMART EXPENSE ENGINE (Corrected for Schema) ---
     const loadStartTime = new Date(load.loadDate).getTime();
-    const loadEndTime = load.harvestDate
-      ? new Date(load.harvestDate).getTime()
+    const loadEndTime = actualHarvestDate
+      ? new Date(actualHarvestDate).getTime()
       : new Date().getTime();
 
     const directExpenses = allExpenses
@@ -122,8 +129,9 @@ export default async function HistoryPage() {
     const totalNetSales = totalRtlAmount - totalGrossCost;
 
     const loadDateObj = new Date(load.loadDate);
-    const harvestDateObj = load.harvestDate
-      ? new Date(load.harvestDate)
+    // Use the true physical harvest date for age calculation
+    const harvestDateObj = actualHarvestDate
+      ? new Date(actualHarvestDate)
       : new Date();
 
     const ageInDays = Math.max(
@@ -138,6 +146,7 @@ export default async function HistoryPage() {
       ...load,
       farmMortality,
       actualHarvest,
+      actualHarvestDate, // <-- Passed to the frontend
       percentHarvest,
       avgSellingPrice,
       displayCustomer,
@@ -200,7 +209,7 @@ export default async function HistoryPage() {
               {/* Farm Title */}
               <div className="flex items-center gap-3 pb-4 border-b-[3px] border-slate-600/30">
                 <MapPin className="h-7 w-7 sm:h-8 sm:w-8 text-slate-600" />
-                <h2 className="text-2xl sm:text-3xl md:text-3xl font-black tracking-tighter uppercase text-foreground">
+                <h2 className="text-2xl sm:text-2xl md:text-2xl font-black tracking-tighter uppercase text-foreground">
                   {farmName}
                 </h2>
               </div>
@@ -213,7 +222,7 @@ export default async function HistoryPage() {
                       {/* Building Sub-Header */}
                       <div className="flex items-center gap-3">
                         <Warehouse className="w-6 h-6 text-slate-700 dark:text-slate-300" />
-                        <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-foreground">
+                        <h3 className="text-xl sm:text-xl font-black uppercase tracking-tight text-foreground">
                           {buildingName}
                         </h3>
                         <span className="bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-400 text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-widest">
@@ -232,7 +241,6 @@ export default async function HistoryPage() {
                             <div className="px-5 py-4 sm:px-6 sm:py-5 border-b border-border/50 bg-slate-50/80 dark:bg-slate-900/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
                               <div className="flex flex-col gap-1.5">
                                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                                  {/* REMOVED REDUNDANT BUILDING NAME - REPLACED WITH ENHANCED BADGES */}
                                   <span className="bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-[11px] sm:text-xs font-black px-3 py-1.5 rounded-md uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
                                     <CheckCircle2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                                     Harvested
@@ -268,9 +276,9 @@ export default async function HistoryPage() {
                                 <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl w-fit shadow-sm">
                                   <CalendarCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                   Harvested:{" "}
-                                  {batch.harvestDate
+                                  {batch.actualHarvestDate
                                     ? new Date(
-                                        batch.harvestDate,
+                                        batch.actualHarvestDate,
                                       ).toLocaleDateString()
                                     : "TBD"}
                                 </div>
@@ -284,7 +292,7 @@ export default async function HistoryPage() {
                                   Target Harvest
                                 </p>
                                 <p className="text-xs sm:text-sm font-bold text-foreground">
-                                  {batch.harvestDate
+                                  {batch.harvestDate // Original target date
                                     ? new Date(
                                         batch.harvestDate,
                                       ).toLocaleDateString()

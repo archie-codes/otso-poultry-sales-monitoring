@@ -11,6 +11,7 @@ import {
   MapPin,
   Check,
   ChevronsUpDown,
+  PlusCircle, // Added for the custom input icon
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,9 @@ export default function AddFarmModal() {
   const [cityCode, setCityCode] = useState("");
   const [barangayName, setBarangayName] = useState("");
 
+  // SEARCH STATE FOR CUSTOM BARANGAY
+  const [brgySearch, setBrgySearch] = useState("");
+
   // UI STATE FOR SEARCH BOXES
   const [openProv, setOpenProv] = useState(false);
   const [openCity, setOpenCity] = useState(false);
@@ -93,22 +97,32 @@ export default function AddFarmModal() {
     return Array.from(new Set(raw.map((b) => b.name.toUpperCase()))).sort();
   }, [cityCode]);
 
+  // Check if the user's search text exists in the database
+  const showCustomBrgyOption =
+    brgySearch.trim().length > 0 &&
+    !availableBarangays.some(
+      (b) => b.toUpperCase() === brgySearch.trim().toUpperCase(),
+    );
+
   // SELECTION HANDLERS
   const handleProvinceSelect = (code: string) => {
     setProvinceCode(code);
     setCityCode("");
     setBarangayName("");
+    setBrgySearch(""); // Reset search
     setOpenProv(false);
   };
 
   const handleCitySelect = (code: string) => {
     setCityCode(code);
     setBarangayName("");
+    setBrgySearch(""); // Reset search
     setOpenCity(false);
   };
 
   const handleBarangaySelect = (name: string) => {
     setBarangayName(name);
+    setBrgySearch(""); // Clear the search box after selection
     setOpenBrgy(false);
   };
 
@@ -136,13 +150,20 @@ export default function AddFarmModal() {
 
     const result = await addFarm(formData);
     if (result.error) {
-      toast.error("Error", { description: result.error });
+      toast.error("Error", {
+        description: result.error,
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
     } else {
-      toast.success("Farm Added!");
+      toast.success("Farm Added!", {
+        description: "The farm has been added to the database.",
+        style: { backgroundColor: "blue", color: "white", border: "none" },
+      });
       setIsOpen(false);
       setProvinceCode("");
       setCityCode("");
       setBarangayName("");
+      setBrgySearch("");
     }
     setLoading(false);
   }
@@ -180,7 +201,7 @@ export default function AddFarmModal() {
                     name="name"
                     required
                     placeholder="e.g., Central Luzon Farm"
-                    className="h-11 rounded-xl"
+                    className="h-11 rounded-xl uppercase"
                   />
                 </div>
 
@@ -208,7 +229,7 @@ export default function AddFarmModal() {
                       <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
                         <Command>
                           <CommandInput placeholder="Type province..." />
-                          <CommandList className="max-h-[200px] overflow-y-auto">
+                          <CommandList className="max-h-[200px] overflow-y-auto custom-scrollbar">
                             <CommandEmpty>No province found.</CommandEmpty>
                             <CommandGroup>
                               {availableProvinces.map((prov) => (
@@ -261,7 +282,7 @@ export default function AddFarmModal() {
                       <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
                         <Command>
                           <CommandInput placeholder="Type city..." />
-                          <CommandList className="max-h-[200px] overflow-y-auto">
+                          <CommandList className="max-h-[200px] overflow-y-auto custom-scrollbar">
                             <CommandEmpty>No city found.</CommandEmpty>
                             <CommandGroup>
                               {availableCities.map((city) => (
@@ -290,7 +311,7 @@ export default function AddFarmModal() {
                     </Popover>
                   </div>
 
-                  {/* BARANGAY SEARCH */}
+                  {/* UPGRADED BARANGAY SEARCH (CREATABLE) */}
                   <div className="space-y-2 md:col-span-2">
                     <label className="text-sm font-semibold">Barangay *</label>
                     <Popover open={openBrgy} onOpenChange={setOpenBrgy}>
@@ -309,9 +330,21 @@ export default function AddFarmModal() {
                       </PopoverTrigger>
                       <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
                         <Command>
-                          <CommandInput placeholder="Type barangay..." />
-                          <CommandList className="max-h-[200px] overflow-y-auto">
-                            <CommandEmpty>No barangay found.</CommandEmpty>
+                          <CommandInput
+                            placeholder="Type barangay..."
+                            value={brgySearch}
+                            onValueChange={setBrgySearch}
+                            className="uppercase"
+                          />
+                          <CommandList className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                            <CommandEmpty className="p-4 text-center text-sm text-muted-foreground">
+                              No barangay found in our database.
+                              <br />
+                              <span className="text-primary font-medium">
+                                Type the name above to add it manually.
+                              </span>
+                            </CommandEmpty>
+
                             <CommandGroup>
                               {availableBarangays.map((brgy) => (
                                 <CommandItem
@@ -330,11 +363,31 @@ export default function AddFarmModal() {
                                   {brgy}
                                 </CommandItem>
                               ))}
+
+                              {/* DYNAMIC CUSTOM ADD BUTTON */}
+                              {showCustomBrgyOption && (
+                                <CommandItem
+                                  value={brgySearch}
+                                  onSelect={() =>
+                                    handleBarangaySelect(
+                                      brgySearch.trim().toUpperCase(),
+                                    )
+                                  }
+                                  className="font-bold text-primary cursor-pointer border-t border-border mt-1 pt-2"
+                                >
+                                  <PlusCircle className="mr-2 h-4 w-4" />
+                                  Use "{brgySearch.trim().toUpperCase()}"
+                                </CommandItem>
+                              )}
                             </CommandGroup>
                           </CommandList>
                         </Command>
                       </PopoverContent>
                     </Popover>
+                    <p className="text-[11px] text-muted-foreground">
+                      If your barangay is missing from the list, simply type it
+                      into the search box to add it manually.
+                    </p>
                   </div>
                 </div>
 

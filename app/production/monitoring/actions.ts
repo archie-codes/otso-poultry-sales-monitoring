@@ -1,52 +1,94 @@
 "use server";
 
 import { db } from "../../../src";
-import { dailyRecords, users } from "../../../src/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  dailyRecords,
+  users,
+  feedTransactions,
+  expenses,
+  loads,
+  buildings,
+} from "../../../src/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../lib/auth";
 
-export async function addDailyRecord(formData: FormData) {
+// --- HELPER: GET AUTH USER ID ---
+async function getAuthUserId() {
   const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return null;
 
-  if (!session || !session.user) {
-    return { error: "You must be logged in to submit records." };
-  }
+  const dbUser = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, session.user.email))
+    .limit(1);
 
-  let userId = (session.user as any).id;
+  return dbUser[0]?.id || null;
+}
 
-  if (!userId && session.user.email) {
-    const dbUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, session.user.email))
-      .limit(1);
-    if (dbUser.length > 0) userId = dbUser[0].id;
-  }
-  if (!userId && session.user.name) {
-    const dbUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.name, session.user.name))
-      .limit(1);
-    if (dbUser.length > 0) userId = dbUser[0].id;
-  }
-  if (!userId) {
-    return { error: "Could not verify your user account in the database." };
-  }
+// ==========================================
+// 1. ADD DAILY RECORD
+// ==========================================
+export async function addDailyRecord(formData: FormData) {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: "Unauthorized. Please log in." };
 
   const loadId = Number(formData.get("loadId"));
   const recordDate = formData.get("recordDate") as string;
   const mortality = Number(formData.get("mortality")) || 0;
-  const feedsConsumed = (formData.get("feedsConsumed") as string) || "0";
+  const feedsConsumed = formData.get("feedsConsumed") as string;
+  const feedType = formData.get("feedType") as string;
   const remarks = formData.get("remarks") as string;
 
-  if (!loadId || !recordDate) {
-    return { error: "Please select an active load and a date." };
-  }
+  if (!loadId || !recordDate) return { error: "Missing required fields." };
 
   try {
+    // 1. SMART PRICE LOOKUP: Find the exact cost per bag from the delivery
+    let lastDelivery = await db
+      .select({
+        costPerBag: feedTransactions.costPerBag,
+        farmId: buildings.farmId,
+      })
+      .from(feedTransactions)
+      .innerJoin(loads, eq(feedTransactions.loadId, loads.id))
+      .innerJoin(buildings, eq(loads.buildingId, buildings.id))
+      .where(
+        and(
+          eq(feedTransactions.loadId, loadId),
+          eq(feedTransactions.feedType, feedType), // Try exact feed type first
+          eq(feedTransactions.transactionType, "DELIVERY_IN"),
+        ),
+      )
+      .orderBy(desc(feedTransactions.createdAt))
+      .limit(1);
+
+    // If exact match fails (e.g. they delivered 'BOOSTER' but logged 'STARTER'),
+    // grab the latest delivery for that building regardless of type.
+    if (lastDelivery.length === 0) {
+      lastDelivery = await db
+        .select({
+          costPerBag: feedTransactions.costPerBag,
+          farmId: buildings.farmId,
+        })
+        .from(feedTransactions)
+        .innerJoin(loads, eq(feedTransactions.loadId, loads.id))
+        .innerJoin(buildings, eq(loads.buildingId, buildings.id))
+        .where(
+          and(
+            eq(feedTransactions.loadId, loadId),
+            eq(feedTransactions.transactionType, "DELIVERY_IN"),
+          ),
+        )
+        .orderBy(desc(feedTransactions.createdAt))
+        .limit(1);
+    }
+
+    const costPerBag = Number(lastDelivery[0]?.costPerBag || 0); // E.g., 1100
+    const farmId = lastDelivery[0]?.farmId;
+
+    // 2. Insert Daily Record
     const [newRecord] = await db
       .insert(dailyRecords)
       .values({
@@ -59,16 +101,90 @@ export async function addDailyRecord(formData: FormData) {
       })
       .returning({ id: dailyRecords.id });
 
-    revalidatePath("/production/monitoring");
-    revalidatePath("/reports");
+    // 3. Log Inventory & Accurate Expense
+    const qtyNum = Number(feedsConsumed); // E.g., 2 bags
+    if (qtyNum > 0 && feedType) {
+      // Reduce Physical Sacks
+      await db.insert(feedTransactions).values({
+        loadId,
+        feedType,
+        transactionType: "DAILY_CONSUMPTION",
+        quantity: -qtyNum,
+        transactionDate: recordDate,
+        recordedBy: userId,
+        remarks: `DAILY_LOG_${newRecord.id}`,
+      });
 
+      // Log the Financial Expense (2 bags * 1100 = 2200)
+      if (farmId && costPerBag > 0) {
+        await db.insert(expenses).values({
+          farmId,
+          loadId, // <--- Locks this expense strictly to this flock!
+          amount: String(qtyNum * costPerBag),
+          expenseType: "feeds",
+          expenseDate: recordDate,
+          recordedBy: userId,
+        });
+      }
+    }
+
+    revalidatePath("/production/monitoring");
     return { success: true, newId: newRecord.id };
   } catch (error) {
-    console.error("Error saving daily record:", error);
-    return { error: "Failed to save record. Please try again." };
+    console.error("Save Error:", error);
+    return { error: "Failed to save record." };
   }
 }
 
+// ==========================================
+// 2. DELETE DAILY RECORD
+// ==========================================
+export async function deleteDailyRecord(id: number) {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: "Unauthorized." };
+
+  try {
+    // 1. Get the record details first to find the date/load
+    const record = await db
+      .select()
+      .from(dailyRecords)
+      .where(eq(dailyRecords.id, id))
+      .limit(1);
+    if (record.length === 0) return { error: "Record not found" };
+
+    const { loadId, recordDate } = record[0];
+
+    // 2. Clean up physical inventory
+    await db
+      .delete(feedTransactions)
+      .where(eq(feedTransactions.remarks, `DAILY_LOG_${id}`));
+
+    // 3. Clean up financial expense
+    // Since we don't have a description, we filter by load, date, and type
+    await db
+      .delete(expenses)
+      .where(
+        and(
+          eq(expenses.loadId, loadId),
+          eq(expenses.expenseDate, recordDate),
+          eq(expenses.expenseType, "feeds"),
+        ),
+      );
+
+    // 4. Delete the actual record
+    await db.delete(dailyRecords).where(eq(dailyRecords.id, id));
+
+    revalidatePath("/production/monitoring");
+    return { success: true };
+  } catch (error) {
+    console.error("Delete error:", error);
+    return { error: "Failed to delete record." };
+  }
+}
+
+// ==========================================
+// 3. UPDATE DAILY RECORD
+// ==========================================
 export async function updateDailyRecord(id: number, formData: FormData) {
   try {
     const mortality = Number(formData.get("mortality")) || 0;
@@ -77,29 +193,12 @@ export async function updateDailyRecord(id: number, formData: FormData) {
 
     await db
       .update(dailyRecords)
-      .set({
-        mortality,
-        feedsConsumed,
-        remarks: remarks || null,
-      })
+      .set({ mortality, feedsConsumed, remarks: remarks || null })
       .where(eq(dailyRecords.id, id));
 
     revalidatePath("/production/monitoring");
-
     return { success: true, updatedId: id };
   } catch (error) {
-    console.error("Update error:", error);
     return { error: "Failed to update record." };
-  }
-}
-
-export async function deleteDailyRecord(id: number) {
-  try {
-    await db.delete(dailyRecords).where(eq(dailyRecords.id, id));
-    revalidatePath("/production/monitoring");
-    return { success: true };
-  } catch (error) {
-    console.error("Delete error:", error);
-    return { error: "Failed to delete record." };
   }
 }

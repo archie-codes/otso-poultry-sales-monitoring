@@ -10,6 +10,7 @@ import {
   date,
   boolean,
   varchar,
+  decimal,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("user_role", ["owner", "staff"]);
@@ -180,4 +181,42 @@ export const notifications = pgTable("notifications", {
   type: text("type").default("login"), // login, expense, harvest, etc.
   isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ==========================================
+// FEED INVENTORY LEDGER
+// ==========================================
+export const feedTransactions = pgTable("feed_transactions", {
+  id: serial("id").primaryKey(),
+
+  // Which specific batch/building does this feed belong to?
+  // We use cascade so if a load is deleted, its feed history goes with it to prevent orphaned data.
+  loadId: integer("load_id").references(() => loads.id, {
+    onDelete: "cascade",
+  }),
+
+  // The specific type of feed (BOOSTER, STARTER, GROWER, FINISHER)
+  feedType: varchar("feed_type", { length: 50 }).notNull(),
+
+  // What kind of movement is this?
+  // (DELIVERY_IN, DAILY_CONSUMPTION, TRANSFER_IN, TRANSFER_OUT, ADJUSTMENT)
+  transactionType: varchar("transaction_type", { length: 50 }).notNull(),
+
+  // Number of sacks/bags.
+  // Deliveries will be positive numbers (e.g., 500).
+  // Consumptions/Transfers Out will be negative numbers (e.g., -15).
+  quantity: integer("quantity").notNull(),
+
+  // The cost per sack (Important for deliveries so we can calculate total expenses later)
+  costPerBag: decimal("cost_per_bag", { precision: 10, scale: 2 }),
+
+  supplierName: varchar("supplier_name", { length: 100 }),
+  referenceNumber: varchar("reference_number", { length: 100 }), // e.g., Delivery Receipt or Invoice #
+
+  transactionDate: date("transaction_date").notNull(),
+  remarks: text("remarks"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Assuming you have a users table. If not, you can remove this line!
+  recordedBy: integer("recorded_by").references(() => users.id),
 });

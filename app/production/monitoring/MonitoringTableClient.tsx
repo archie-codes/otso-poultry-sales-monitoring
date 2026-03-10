@@ -16,6 +16,7 @@ import {
   CalendarIcon,
   ChevronDown,
   X,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -116,42 +117,37 @@ export default function MonitoringTableClient({
   };
 
   return (
-    <div className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm flex flex-col relative">
+    <div className="bg-card border border-border/50 rounded-[2.5rem] overflow-hidden shadow-sm flex flex-col relative">
+      {/* FILTER HEADER */}
       <div className="px-6 py-5 border-b border-border/50 bg-slate-50/50 dark:bg-slate-900/20 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <h2 className="font-bold text-foreground text-lg shrink-0">
-            Recent Activity Logs
+          <h2 className="font-black text-foreground text-lg shrink-0 uppercase tracking-tight">
+            Activity Logs
           </h2>
           {isPending && (
             <Loader2 className="w-5 h-5 text-emerald-500 animate-spin" />
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto overflow-x-auto pb-2 xl:pb-0 custom-scrollbar">
-          <div className="flex items-center text-muted-foreground mr-1 shrink-0 px-2 lg:flex">
-            <Filter className="w-4 h-4 mr-2 text-emerald-500" />
-            <span className="text-[10px] font-black uppercase tracking-widest">
-              Filters
-            </span>
-          </div>
-
-          <div className="w-full sm:w-auto bg-white dark:bg-slate-950 rounded-xl border border-border focus-within:ring-2 ring-emerald-500/50 transition-shadow flex items-center pr-1 shrink-0">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+          {/* DATE FILTER */}
+          <div className="w-full sm:w-auto bg-white dark:bg-slate-950 rounded-xl border border-border flex items-center pr-1 shrink-0">
             <Popover open={openDate} onOpenChange={setOpenDate}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
                   disabled={isPending}
                   className={cn(
-                    "w-full sm:w-[160px] justify-between h-11 hover:bg-transparent hover:text-foreground rounded-xl px-4 text-left font-bold uppercase tracking-wider text-xs",
+                    "w-full sm:w-[160px] justify-between h-11 px-4 text-left font-bold uppercase tracking-wider text-[10px]",
                     !selectedDate && "text-slate-500 dark:text-slate-400",
                   )}
                 >
                   <div className="flex items-center min-w-0">
-                    <CalendarIcon className="w-4 h-4 mr-2 shrink-0" />
+                    <CalendarIcon className="w-4 h-4 mr-2 shrink-0 opacity-50" />
                     <span className="truncate">
                       {selectedDate
                         ? format(selectedDate, "MMM d, yyyy")
-                        : "DATE"}
+                        : "Date"}
                     </span>
                   </div>
                   <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -171,77 +167,45 @@ export default function MonitoringTableClient({
                 />
               </PopoverContent>
             </Popover>
-
-            {selectedDate && (
-              <button
-                onClick={() => updateFilter("date", "all")}
-                disabled={isPending}
-                className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg text-slate-400 hover:text-red-500 transition-colors shrink-0"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
           </div>
 
-          <div className="w-full sm:w-48 xl:w-56 bg-white dark:bg-slate-950 rounded-xl border border-border focus-within:ring-2 ring-emerald-500/50 transition-shadow shrink-0">
+          {/* FARM FILTER */}
+          <div className="w-full sm:w-48 bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0">
             <Popover open={openFarm} onOpenChange={setOpenFarm}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
-                  role="combobox"
-                  aria-expanded={openFarm}
-                  disabled={isPending}
-                  className="w-full justify-between h-11 hover:bg-transparent hover:text-foreground rounded-xl px-4"
+                  className="w-full justify-between h-11 px-4 text-[10px] font-bold uppercase tracking-wider"
                 >
-                  <div className="flex items-center text-slate-500 dark:text-slate-400 min-w-0">
-                    <Warehouse className="w-4 h-4 mr-2 shrink-0" />
-                    <span className="font-bold text-foreground uppercase tracking-wider truncate text-xs">
-                      {selectedFarm === "all" ? "ALL FARMS" : selectedFarm}
-                    </span>
-                  </div>
+                  <Warehouse className="w-4 h-4 mr-2 opacity-50" />
+                  <span className="truncate">
+                    {selectedFarm === "all" ? "All Farms" : selectedFarm}
+                  </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="-(--radix-popover-trigger-width) p-0 rounded-xl border-border shadow-xl">
+              <PopoverContent className="w-48 p-0 shadow-xl">
                 <Command>
                   <CommandInput placeholder="Search farm..." />
-                  <CommandList className="max-h-[250px] custom-scrollbar">
+                  <CommandList>
                     <CommandEmpty>No farm found.</CommandEmpty>
                     <CommandGroup>
                       <CommandItem
-                        value="all"
                         onSelect={() => {
                           updateFilter("farm", "all");
                           setOpenFarm(false);
                         }}
-                        className="font-bold uppercase tracking-wider cursor-pointer py-3 text-xs"
                       >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedFarm === "all"
-                              ? "opacity-100"
-                              : "opacity-0",
-                          )}
-                        />{" "}
                         ALL FARMS
                       </CommandItem>
-                      {farms.map((f: string) => (
+                      {farms.map((f) => (
                         <CommandItem
                           key={f}
-                          value={f}
                           onSelect={() => {
                             updateFilter("farm", f);
                             setOpenFarm(false);
                           }}
-                          className="font-bold uppercase tracking-wider cursor-pointer py-3 text-xs"
                         >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              selectedFarm === f ? "opacity-100" : "opacity-0",
-                            )}
-                          />{" "}
                           {f}
                         </CommandItem>
                       ))}
@@ -252,71 +216,46 @@ export default function MonitoringTableClient({
             </Popover>
           </div>
 
-          <div className="w-full sm:w-48 xl:w-56 bg-white dark:bg-slate-950 rounded-xl border border-border focus-within:ring-2 ring-emerald-500/50 transition-shadow shrink-0">
+          {/* BUILDING FILTER (Cascaded) */}
+          <div className="w-full sm:w-48 bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0">
             <Popover open={openBuilding} onOpenChange={setOpenBuilding}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
-                  role="combobox"
-                  aria-expanded={openBuilding}
-                  disabled={isPending || selectedFarm === "all"}
-                  className="w-full justify-between h-11 hover:bg-transparent hover:text-foreground rounded-xl px-4"
+                  disabled={selectedFarm === "all"}
+                  className="w-full justify-between h-11 px-4 text-[10px] font-bold uppercase tracking-wider disabled:opacity-30"
                 >
-                  <div className="flex items-center text-slate-500 dark:text-slate-400 min-w-0">
-                    <Home className="w-4 h-4 mr-2 shrink-0" />
-                    <span className="font-bold text-foreground uppercase tracking-wider truncate text-xs">
-                      {selectedFarm === "all"
-                        ? "SELECT FARM FIRST"
-                        : selectedBuilding === "all"
-                          ? "ALL BUILDINGS"
-                          : selectedBuilding}
-                    </span>
-                  </div>
+                  <Home className="w-4 h-4 mr-2 opacity-50" />
+                  <span className="truncate">
+                    {selectedBuilding === "all"
+                      ? "All Buildings"
+                      : selectedBuilding}
+                  </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-(--radix-popover-trigger-width) p-0 rounded-xl border-border shadow-xl">
+              <PopoverContent className="w-48 p-0 shadow-xl">
                 <Command>
                   <CommandInput placeholder="Search building..." />
-                  <CommandList className="max-h-[250px] custom-scrollbar">
+                  <CommandList>
                     <CommandEmpty>No building found.</CommandEmpty>
                     <CommandGroup>
                       <CommandItem
-                        value="all"
                         onSelect={() => {
                           updateFilter("building", "all");
                           setOpenBuilding(false);
                         }}
-                        className="font-bold uppercase tracking-wider cursor-pointer py-3 text-xs"
                       >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedBuilding === "all"
-                              ? "opacity-100"
-                              : "opacity-0",
-                          )}
-                        />{" "}
                         ALL BUILDINGS
                       </CommandItem>
-                      {buildings.map((b: string) => (
+                      {buildings.map((b) => (
                         <CommandItem
                           key={b}
-                          value={b}
                           onSelect={() => {
                             updateFilter("building", b);
                             setOpenBuilding(false);
                           }}
-                          className="font-bold uppercase tracking-wider cursor-pointer py-3 text-xs"
                         >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              selectedBuilding === b
-                                ? "opacity-100"
-                                : "opacity-0",
-                            )}
-                          />{" "}
                           {b}
                         </CommandItem>
                       ))}
@@ -331,20 +270,19 @@ export default function MonitoringTableClient({
             <Button
               variant="ghost"
               onClick={resetFilters}
-              disabled={isPending}
-              className="h-11 px-4 rounded-xl text-xs font-bold uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0"
+              className="h-11 px-4 text-[10px] font-black uppercase text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors"
             >
-              <X className="w-4 h-4 mr-2" />
-              Reset
+              <X className="w-4 h-4 mr-1" /> Reset
             </Button>
           )}
         </div>
       </div>
 
+      {/* TABLE CONTENT */}
       <div
         className={cn(
-          "overflow-x-auto custom-scrollbar min-h-[400px] transition-opacity duration-300 relative",
-          isPending && "opacity-50 pointer-events-none",
+          "overflow-x-auto min-h-[400px] transition-opacity duration-300",
+          isPending && "opacity-50",
         )}
       >
         <table className="w-full text-sm text-left border-collapse">
@@ -359,13 +297,13 @@ export default function MonitoringTableClient({
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-red-500 text-center whitespace-nowrap">
                 Mortality
               </th>
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 text-center whitespace-nowrap">
-                Feeds (Sacks)
+              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-amber-600 text-center whitespace-nowrap">
+                Feeds
               </th>
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground whitespace-nowrap">
                 Recorded By
               </th>
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right">
+              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right whitespace-nowrap">
                 Actions
               </th>
             </tr>
@@ -373,12 +311,14 @@ export default function MonitoringTableClient({
           <tbody className="divide-y divide-border/50">
             {history.length === 0 ? (
               <tr>
-                {/* CHANGED colSpan from 6 to 5 */}
                 <td
-                  colSpan={5}
-                  className="px-6 py-12 text-center text-muted-foreground font-semibold"
+                  colSpan={6}
+                  className="px-6 py-20 text-center text-muted-foreground font-black uppercase tracking-widest opacity-20"
                 >
-                  No daily records found for this filter.
+                  <div className="flex flex-col items-center gap-2">
+                    <Filter className="w-8 h-8" />
+                    No daily records found
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -386,20 +326,20 @@ export default function MonitoringTableClient({
                 <tr
                   key={record.id}
                   className={cn(
-                    "group transition-colors duration-1000",
+                    "group transition-all duration-700",
                     highlightedId === String(record.id)
-                      ? "bg-emerald-100/60 dark:bg-emerald-900/40"
-                      : "hover:bg-slate-50/50 dark:hover:bg-slate-900/20",
+                      ? "bg-emerald-50 dark:bg-emerald-900/20"
+                      : "hover:bg-slate-50/50",
                   )}
                 >
-                  <td className="px-6 py-4 whitespace-nowrap font-semibold">
+                  <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900 dark:text-slate-100">
                     {format(new Date(record.date), "MMM d, yyyy")}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-bold block text-foreground">
+                    <span className="font-black block text-xs uppercase">
                       {record.buildingName}
                     </span>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">
                       {record.farmName}
                     </span>
                   </td>
@@ -408,21 +348,42 @@ export default function MonitoringTableClient({
                       className={cn(
                         "inline-flex items-center justify-center px-3 py-1 rounded-lg text-xs font-black",
                         record.mortality > 0
-                          ? "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
-                          : "text-muted-foreground",
+                          ? "bg-red-50 text-red-600"
+                          : "text-slate-400",
                       )}
                     >
-                      {Number(record.mortality)}
+                      {record.mortality}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center font-bold text-foreground">
-                    {Number(record.feeds)}{" "}
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      sacks
-                    </span>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <div className="flex flex-col items-center">
+                      <div className="text-sm font-black text-slate-900 dark:text-slate-100">
+                        {record.feeds}{" "}
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">
+                          Bags
+                        </span>
+                      </div>
+                      {/* FEED TYPE BADGE */}
+                      {record.feedType && (
+                        <span
+                          className={cn(
+                            "mt-1 px-2 py-0.5 rounded-md text-[9px] font-black border uppercase tracking-wider",
+                            record.feedType === "BOOSTER"
+                              ? "bg-indigo-50 text-indigo-600 border-indigo-100"
+                              : record.feedType === "STARTER"
+                                ? "bg-amber-50 text-amber-600 border-amber-100"
+                                : record.feedType === "GROWER"
+                                  ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                  : "bg-slate-50 text-slate-500 border-slate-100",
+                          )}
+                        >
+                          {record.feedType}
+                        </span>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    {record.staffName || "Unknown"}
+                  <td className="px-6 py-4 whitespace-nowrap text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                    {record.staffName || "System"}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <RecordActions record={record} userRole={userRole} />
@@ -434,8 +395,9 @@ export default function MonitoringTableClient({
         </table>
       </div>
 
-      <div className="px-6 py-4 border-t border-border/50 bg-slate-50/30 dark:bg-slate-900/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+      {/* PAGINATION FOOTER */}
+      <div className="px-6 py-4 border-t border-border/50 bg-slate-50/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
           Page {currentPage} of {totalPages || 1}
         </p>
         <div className="flex items-center gap-2">
@@ -444,7 +406,7 @@ export default function MonitoringTableClient({
             size="sm"
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage <= 1 || isPending}
-            className="h-9 px-4 rounded-xl font-bold"
+            className="h-9 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest"
           >
             <ChevronLeft className="w-4 h-4 mr-1" /> Prev
           </Button>
@@ -453,7 +415,7 @@ export default function MonitoringTableClient({
             size="sm"
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage >= totalPages || isPending}
-            className="h-9 px-4 rounded-xl font-bold"
+            className="h-9 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest"
           >
             Next <ChevronRight className="w-4 h-4 ml-1" />
           </Button>

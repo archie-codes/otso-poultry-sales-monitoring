@@ -53,7 +53,7 @@ export default async function ReportsPage() {
   const allExpenses = await db.select().from(expenses);
   const allHarvests = await db.select().from(harvestRecords);
 
-  // 2. THE UPGRADED NUMBER CRUNCHING ENGINE (With Time-Gated Expenses)
+  // 2. THE UPGRADED NUMBER CRUNCHING ENGINE
   const reports = allLoadsData.map((load) => {
     const actualQuantityLoad = load.quantity;
 
@@ -80,29 +80,31 @@ export default async function ReportsPage() {
         ? "Multiple Buyers"
         : uniqueCustomers[0] || load.customerName || "None";
 
-    // --- SMART EXPENSE ENGINE (Time-Gated) ---
-    // Establish the exact timeline of this specific batch
-    const loadStartTime = new Date(load.loadDate).getTime();
-    const loadEndTime = load.harvestDate
-      ? new Date(load.harvestDate).getTime()
-      : new Date().getTime();
+    // --- SMART EXPENSE ENGINE (STRICT MIDNIGHT TIME-GATING) ---
+    const start = new Date(load.loadDate);
+    start.setHours(0, 0, 0, 0); // Force strictly to start of day
+    const loadStartTime = start.getTime();
 
-    // Calculate Direct Building Expenses (Only during this batch's timeline)
-    const directExpenses = allExpenses
+    const end = load.harvestDate ? new Date(load.harvestDate) : new Date();
+    end.setHours(23, 59, 59, 999); // Force strictly to end of day
+    const loadEndTime = end.getTime();
+
+    // Calculate Direct Building Expenses (Strictly from the database)
+    const directExpensesAmount = allExpenses
       .filter((e) => e.loadId === load.id)
       .reduce((sum, e) => sum + Number(e.amount), 0);
 
-    // Calculate Shared Farm Expenses (Only during this batch's timeline)
+    // Calculate Shared Farm Expenses strictly within timeline
     const farmActiveLoadsCount =
       allLoadsData.filter((l) => l.farmId === load.farmId && l.isActive)
         .length || 1;
 
     const sharedExpensesTotal = allExpenses
       .filter((e) => {
-        // Must be a shared expense for this farm (no specific load attached)
+        // Must be a shared expense (no specific building attached)
         if (e.farmId !== load.farmId || e.loadId !== null) return false;
 
-        // Time-gate using your schema's expenseDate (or createdAt fallback)
+        // Strict Time-gate
         const expenseTime = new Date(e.expenseDate || e.createdAt).getTime();
         return expenseTime >= loadStartTime && expenseTime <= loadEndTime;
       })
@@ -111,9 +113,8 @@ export default async function ReportsPage() {
     const sharedExpenseShare = sharedExpensesTotal / farmActiveLoadsCount;
     // -----------------------------------------
 
-    const totalGrossCost = directExpenses + sharedExpenseShare;
+    const totalGrossCost = directExpensesAmount + sharedExpenseShare;
 
-    // CORRECTED: Total Cost divided by Actual Harvested Birds
     const actualCostPerChick =
       actualHarvest > 0 ? totalGrossCost / actualHarvest : 0;
 
@@ -166,7 +167,6 @@ export default async function ReportsPage() {
   const groupedData = reports.reduce(
     (acc, report) => {
       const farm = report.farmName;
-
       if (!acc[farm]) acc[farm] = [];
       acc[farm].push(report);
 
@@ -179,7 +179,6 @@ export default async function ReportsPage() {
           report.quantity - report.farmMortality - report.actualHarvest;
         globalTotals.activeBirds += Math.max(0, currentLiveBirds);
       }
-
       return acc;
     },
     {} as Record<string, typeof reports>,
@@ -190,13 +189,12 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto pb-16 px-4 sm:px-6 lg:px-8 py-8">
-      {/* 1. EXECUTIVE HEADER & GLOBAL KPIs (LAPTOP FIXED) */}
+      {/* 1. EXECUTIVE HEADER & GLOBAL KPIs */}
       <div className="flex flex-col xl:flex-row gap-6 mb-8">
-        {/* TITLE SECTION */}
-        <div className="w-full xl:w-[35%] shrink-0 bg-card border border-border/50 p-6 lg:p-8 rounded-3xl shadow-sm relative overflow-hidden flex flex-col justify-center">
+        <div className="w-full xl:w-[35%] shrink-0 bg-card border border-border/50 p-6 lg:p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden flex flex-col justify-center">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
 
-          <h1 className="text-3xl sm:text-3xl font-black tracking-tight flex items-center gap-3 text-foreground">
+          <h1 className="text-3xl sm:text-3xl font-black tracking-tight flex items-center gap-3 text-foreground uppercase">
             <FileBarChart className="h-9 w-9 sm:h-10 sm:w-10 text-blue-600 shrink-0" />
             Executive Ledger
           </h1>
@@ -206,7 +204,6 @@ export default async function ReportsPage() {
           </p>
         </div>
 
-        {/* INTERACTIVE KPI SECTION */}
         <div className="flex-1 flex flex-col justify-center">
           <KPISection globalTotals={globalTotals} reports={reports} />
         </div>
@@ -237,7 +234,7 @@ export default async function ReportsPage() {
                   {loadsInFarm.map((report) => (
                     <div
                       key={report.id}
-                      className="bg-card border border-border/60 rounded-[2rem] overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-md"
+                      className="bg-card border border-border/60 rounded-[2.5rem] overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-md"
                     >
                       <div className="px-5 py-4 sm:px-6 sm:py-5 border-b border-border/50 bg-slate-50/80 dark:bg-slate-900/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex flex-col gap-1.5">
@@ -351,11 +348,11 @@ export default async function ReportsPage() {
                         </div>
 
                         <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            Avg Selling Price
+                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-500">
+                            Selling Price
                           </p>
-                          <p className="text-xs sm:text-sm font-bold text-foreground">
-                            {formatMoney(report.avgSellingPrice)}
+                          <p className="text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400">
+                            {formatMoney(Number(report.sellingPrice))}
                           </p>
                         </div>
 
@@ -378,8 +375,8 @@ export default async function ReportsPage() {
                         </div>
                       </div>
 
-                      <div className="px-5 py-5 sm:px-6 sm:py-6 bg-slate-100 dark:bg-slate-900 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/50 rounded-b-[2rem]">
-                        <div className="flex items-center justify-between bg-white dark:bg-slate-950 p-3 sm:p-4 rounded-2xl border border-border/50 shadow-sm">
+                      <div className="px-5 py-5 sm:px-6 sm:py-6 bg-slate-100 dark:bg-slate-900 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/50 rounded-b-[2.5rem]">
+                        <div className="flex items-center justify-between bg-white dark:bg-slate-950 p-3 sm:p-4 rounded-[1.5rem] border border-border/50 shadow-sm">
                           <div className="flex items-center gap-3">
                             <div className="p-2 sm:p-2.5 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-xl">
                               <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -397,7 +394,7 @@ export default async function ReportsPage() {
 
                         <div
                           className={cn(
-                            "flex items-center justify-between p-3 sm:p-4 rounded-2xl shadow-sm border",
+                            "flex items-center justify-between p-3 sm:p-4 rounded-[1.5rem] shadow-sm border",
                             report.totalNetSales >= 0
                               ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900/50"
                               : "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900/50",
