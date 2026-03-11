@@ -3,7 +3,15 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { addExpense } from "./actions";
-import { X, Loader2, Save, TrendingDown, CalendarIcon } from "lucide-react";
+import {
+  X,
+  Loader2,
+  Save,
+  TrendingDown,
+  CalendarIcon,
+  Info,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -25,11 +33,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FormattedNumberInput } from "@/components/ui/FormattedNumberInput"; // <-- NEW IMPORT
+import { FormattedNumberInput } from "@/components/ui/FormattedNumberInput";
+import { Textarea } from "@/components/ui/textarea";
+
+// --- STRICT DB MAPPING CATEGORIES ---
+// The 'value' must strictly match what your DB schema expects!
+const SHARED_CATEGORIES = [
+  { label: "Electricity", value: "electricity" },
+  { label: "Water", value: "water" },
+  { label: "Fuel / Gas / Diesel", value: "fuel" },
+  { label: "Labor / Salary", value: "labor" },
+  { label: "Maintenance / Truck", value: "maintenance" },
+  { label: "Miscellaneous / Meals", value: "miscellaneous" },
+];
+
+const INDIVIDUAL_CATEGORIES = [
+  { label: "Medicine", value: "medicine" },
+  { label: "Vaccine", value: "vaccine" },
+  { label: "Antibiotics", value: "antibiotics" },
+  { label: "Chick Purchase", value: "chick_purchase" },
+];
 
 export default function AddExpenseModal({
   farms = [],
-  activeLoads = [], // <-- This guarantees it will NEVER be undefined
+  activeLoads = [],
 }: {
   farms: any[];
   activeLoads: any[];
@@ -50,6 +77,14 @@ export default function AddExpenseModal({
     (load) => load.farmId === Number(farmId),
   );
 
+  // LOGIC: Check if current category is a division/shared expense by checking values
+  const isSharedExpense = SHARED_CATEGORIES.some(
+    (cat) => cat.value === expenseType,
+  );
+  const displayLabel = [...SHARED_CATEGORIES, ...INDIVIDUAL_CATEGORIES].find(
+    (c) => c.value === expenseType,
+  )?.label;
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -57,15 +92,17 @@ export default function AddExpenseModal({
       toast.error("Missing Field", { description: "Please select a farm." });
       return;
     }
-    if (!loadId) {
-      toast.error("Missing Field", {
-        description: "Please select a target building or Shared.",
-      });
-      return;
-    }
     if (!expenseType) {
       toast.error("Missing Field", {
         description: "Please select an expense category.",
+      });
+      return;
+    }
+    // If it's an INDIVIDUAL expense, force them to pick a building
+    if (!isSharedExpense && !loadId) {
+      toast.error("Missing Field", {
+        description:
+          "Please select a target building for this specific expense.",
       });
       return;
     }
@@ -78,7 +115,8 @@ export default function AddExpenseModal({
 
     const formData = new FormData(e.currentTarget);
     formData.set("farmId", farmId);
-    formData.set("loadId", loadId);
+    // Force to 'shared' if it's a division cost, else attach specific building ID
+    formData.set("loadId", isSharedExpense ? "shared" : loadId);
     formData.set("expenseType", expenseType);
     formData.set("expenseDate", format(expenseDate, "yyyy-MM-dd"));
 
@@ -120,7 +158,7 @@ export default function AddExpenseModal({
                     Expense
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Record costs and distribute salary.
+                    Record costs and distribute budget.
                   </p>
                 </div>
                 <button
@@ -132,7 +170,9 @@ export default function AddExpenseModal({
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="grid grid-cols-2 gap-4">
+                {/* 1. FARM & DATE */}
+                <div className="grid grid-cols-1 gap-4">
+                  {/* FARM DROPDOWN */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold">
                       Select Farm <span className="text-red-500">*</span>
@@ -144,7 +184,8 @@ export default function AddExpenseModal({
                         setLoadId("");
                       }}
                     >
-                      <SelectTrigger className="w-full h-11 rounded-xl bg-background border-input focus:ring-red-500">
+                      {/* FIXED: Exact height, padding, and border forced */}
+                      <SelectTrigger className="w-full h-[46px] rounded-xl border border-input bg-background px-4 py-2 text-sm font-normal focus:ring-red-500 flex items-center justify-between shadow-sm">
                         <SelectValue placeholder="-- Farm --" />
                       </SelectTrigger>
                       <SelectContent className="z-200">
@@ -160,25 +201,28 @@ export default function AddExpenseModal({
                     </Select>
                   </div>
 
+                  {/* DATE PICKER */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold">
                       Expense Date <span className="text-red-500">*</span>
                     </label>
                     <Popover>
                       <PopoverTrigger asChild>
+                        {/* FIXED: Removed variant="outline" to stop it from fighting the custom border. Exact same height and padding as Select. */}
                         <Button
-                          variant={"outline"}
+                          type="button"
                           className={cn(
-                            "w-full h-11 rounded-xl justify-start text-left font-normal bg-background border-input focus:ring-red-500",
+                            "w-full h-[46px] rounded-xl border border-input bg-background px-4 py-2 text-sm font-normal text-foreground hover:bg-background focus:ring-red-500 flex items-center justify-start text-left shadow-sm transition-none",
                             !expenseDate && "text-muted-foreground",
                           )}
                         >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {expenseDate ? (
-                            format(expenseDate, "MMM d, yyyy")
-                          ) : (
-                            <span>Pick a date</span>
-                          )}
+                          <CalendarIcon className="mr-3 h-4 w-4 opacity-70" />
+                          <span className="flex-1 truncate">
+                            {expenseDate
+                              ? format(expenseDate, "MMM d, yyyy")
+                              : "Pick a date"}
+                          </span>
+                          <ChevronDown className="h-4 w-4 opacity-60" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 z-200">
@@ -193,86 +237,137 @@ export default function AddExpenseModal({
                   </div>
                 </div>
 
-                <div className="space-y-2 p-4 bg-secondary/20 rounded-xl border border-border/50">
+                {/* 2. CATEGORY SELECTOR (Grouped) */}
+                <div className="space-y-2">
                   <label className="text-sm font-semibold">
-                    Which building is this for?{" "}
-                    <span className="text-red-500">*</span>
+                    Expense Category <span className="text-red-500">*</span>
                   </label>
-                  <Select
-                    value={loadId}
-                    onValueChange={setLoadId}
-                    disabled={!farmId}
-                  >
+                  <Select value={expenseType} onValueChange={setExpenseType}>
                     <SelectTrigger className="w-full h-11 rounded-xl bg-background border-input focus:ring-red-500">
-                      <SelectValue placeholder="-- Select Target --" />
+                      <SelectValue placeholder="-- Select Category --" />
                     </SelectTrigger>
-                    <SelectContent className="z-200">
-                      <SelectItem
-                        value="shared"
-                        className="font-bold text-primary focus:text-primary"
-                      >
-                        🏢 SHARED ACROSS ENTIRE FARM
-                      </SelectItem>
+                    <SelectContent className="z-200 max-h-[300px]">
                       <SelectGroup>
-                        <SelectLabel>Direct to Specific Building:</SelectLabel>
-                        {availableLoads.map((load, index) => (
-                          <SelectItem
-                            key={`load-${load.id || index}`}
-                            value={String(load.id)}
-                          >
-                            {load.buildingName} (Active Flock)
+                        <SelectLabel className="text-blue-600 font-black tracking-widest text-[10px] uppercase">
+                          Farm Division (Shared Cost)
+                        </SelectLabel>
+                        {SHARED_CATEGORIES.map((cat) => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            {cat.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+
+                      <SelectGroup>
+                        <SelectLabel className="text-emerald-600 font-black tracking-widest text-[10px] uppercase mt-2">
+                          Individual (Per Building)
+                        </SelectLabel>
+                        {INDIVIDUAL_CATEGORIES.map((cat) => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            {cat.label}
                           </SelectItem>
                         ))}
                       </SelectGroup>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Selecting "Shared" will automatically divide the cost among
-                    all active loads.
-                  </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">
-                      Expense Type <span className="text-red-500">*</span>
-                    </label>
-                    <Select value={expenseType} onValueChange={setExpenseType}>
-                      <SelectTrigger className="w-full h-11 rounded-xl bg-background border-input focus:ring-red-500">
-                        <SelectValue placeholder="-- Category --" />
-                      </SelectTrigger>
-                      <SelectContent className="z-200">
-                        <SelectItem value="labor">Labor / Salary</SelectItem>
-                        <SelectItem value="feeds">Feeds</SelectItem>
-                        <SelectItem value="medicine">
-                          Medicine / Vaccines
-                        </SelectItem>
-                        <SelectItem value="electricity">Electricity</SelectItem>
-                        <SelectItem value="water">Water</SelectItem>
-                        <SelectItem value="fuel">Fuel</SelectItem>
-                        <SelectItem value="maintenance">Maintenance</SelectItem>
-                        <SelectItem value="miscellaneous">
-                          Miscellaneous
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                {/* 3. DYNAMIC BUILDING TARGET */}
+                {expenseType && (
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                    {isSharedExpense ? (
+                      // DIVISION BANNER
+                      <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl p-4 flex gap-3 items-start">
+                        <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-bold text-blue-800 dark:text-blue-300">
+                            Division Computation
+                          </p>
+                          <p className="text-xs text-blue-600/80 dark:text-blue-400 mt-1 leading-snug">
+                            <strong>{displayLabel}</strong> is an overhead cost.
+                            It will be automatically split among all active
+                            buildings.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      // INDIVIDUAL BUILDING SELECTOR
+                      <div className="space-y-2 p-4 bg-secondary/20 rounded-xl border border-border/50">
+                        <label className="text-sm font-semibold text-emerald-700 dark:text-emerald-500">
+                          Which building is this for?{" "}
+                          <span className="text-red-500">*</span>
+                        </label>
+                        <Select
+                          value={loadId}
+                          onValueChange={setLoadId}
+                          disabled={!farmId}
+                        >
+                          <SelectTrigger className="w-full h-11 rounded-xl bg-background border-emerald-200 focus:ring-emerald-500">
+                            <SelectValue
+                              placeholder={
+                                farmId
+                                  ? "-- Select Target Building --"
+                                  : "Select Farm First"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent className="z-200">
+                            <SelectGroup>
+                              <SelectLabel>
+                                Direct to Specific Building:
+                              </SelectLabel>
+                              {availableLoads.length === 0 ? (
+                                <p className="text-xs text-muted-foreground p-2">
+                                  No active buildings found.
+                                </p>
+                              ) : (
+                                availableLoads.map((load, index) => (
+                                  <SelectItem
+                                    key={`load-${load.id || index}`}
+                                    value={String(load.id)}
+                                  >
+                                    {load.buildingName} (Active Flock)
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
+                )}
 
+                {/* 4. AMOUNT & REMARKS (Disabled remarks form input since it isn't in DB yet) */}
+                <div className="grid grid-cols-1 gap-4 pt-2">
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-red-600 dark:text-red-400">
                       Total Amount (₱) <span className="text-red-500">*</span>
                     </label>
-                    {/* CHANGED TO FORMATTED NUMBER INPUT */}
                     <FormattedNumberInput
                       name="amount"
                       required
                       allowDecimals={true}
                       placeholder="10,000.00"
-                      className="h-11 rounded-xl bg-background font-bold text-lg focus-visible:ring-red-500"
+                      className="h-14 rounded-xl bg-background font-black text-2xl px-4 border-red-200 focus-visible:ring-red-500 placeholder:text-muted-foreground/50"
                     />
                   </div>
+
+                  {/* Commented out remarks as it is not supported in DB schema yet! */}
+                  {/* <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Receipt / Remarks (Optional)
+                    </label>
+                    <Textarea 
+                      name="remarks" 
+                      placeholder="Add invoice number, vendor name, or specific notes..." 
+                      rows={2} 
+                      className="rounded-xl resize-none px-4 py-3 bg-background" 
+                    />
+                  </div> */}
                 </div>
 
+                {/* SUBMIT */}
                 <div className="pt-2 flex justify-end gap-3 border-t border-border/50 mt-2">
                   <Button
                     type="button"
@@ -284,7 +379,10 @@ export default function AddExpenseModal({
                   </Button>
                   <Button
                     type="submit"
-                    disabled={loading}
+                    disabled={
+                      loading ||
+                      (!isSharedExpense && !loadId && expenseType !== "")
+                    }
                     className="h-11 px-8 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 hover:-translate-y-0.5 transition-all shadow-sm"
                   >
                     {loading ? (

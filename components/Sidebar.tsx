@@ -13,6 +13,7 @@ import {
   Users,
   ShieldAlert,
   ChevronDown,
+  Package, // <-- NEW: Added Package icon for Inventory
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -68,6 +69,8 @@ const ownerGroups: NavGroup[] = [
         href: "/production/monitoring",
         icon: Activity,
       },
+      // --- NEW ROUTE ---
+      { name: "Feed Inventory", href: "/inventory", icon: Package },
     ],
   },
   {
@@ -103,6 +106,8 @@ const staffGroups: NavGroup[] = [
         icon: Activity,
       },
       { name: "Expenses", href: "/expenses", icon: TrendingDown },
+      // --- NEW ROUTE ---
+      { name: "Feed Inventory", href: "/inventory", icon: Package },
     ],
   },
 ];
@@ -178,7 +183,7 @@ export default function Sidebar({ role }: { role: string }) {
                               href={subItem.href}
                               className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group ${
                                 isStrictActive
-                                  ? "bg-slate-100 text-slate-900 font-bold dark:bg-slate-800 dark:text-white shadow-sm"
+                                  ? "bg-slate-100 text-blue-900 font-bold dark:bg-slate-800 dark:text-white shadow-sm"
                                   : "text-muted-foreground hover:text-slate-900 text-sm font-medium dark:hover:text-white"
                               }`}
                             >

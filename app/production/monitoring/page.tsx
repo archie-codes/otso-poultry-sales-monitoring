@@ -8,11 +8,13 @@ import {
   buildings,
   farms,
   users,
-  feedTransactions, // Used for both history join and active stock calculation
+  feedTransactions,
 } from "../../../src/db/schema";
+// Added 'sql' to drizzle-orm imports
 import { desc, eq, and, sql } from "drizzle-orm";
-import AddDailyRecordModal from "./AddDailyRecordModal";
 import MonitoringTableClient from "./MonitoringTableClient";
+import LogMortalityModal from "./LogMortalityModal";
+import LogFeedsModal from "./LogFeedsModal";
 
 export default async function DailyMonitoringPage(props: {
   searchParams: Promise<{
@@ -36,25 +38,23 @@ export default async function DailyMonitoringPage(props: {
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
   // ==============================================================================
-  // 1. FETCH ACTIVE LOADS & CALCULATE LIVE FEED STOCK FOR THE MODAL
+  // 1. FETCH ALL LOADS & CALCULATE LIVE FEED STOCK
   // ==============================================================================
-  const activeLoadsRaw = await db
+  const allLoadsRaw = await db
     .select({
       id: loads.id,
       quantity: loads.actualQuantityLoad,
       buildingName: buildings.name,
       farmName: farms.name,
+      isActive: loads.isActive,
     })
     .from(loads)
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
-    .innerJoin(farms, eq(buildings.farmId, farms.id))
-    .where(eq(loads.isActive, true));
+    .innerJoin(farms, eq(buildings.farmId, farms.id));
 
-  // Fetch all feed transactions to calculate remaining stock
   const allFeedTrans = await db.select().from(feedTransactions);
 
-  // Map the live feed stock into the active loads array
-  const activeLoads = activeLoadsRaw.map((load) => {
+  const mappedLoads = allLoadsRaw.map((load) => {
     const feedStock = allFeedTrans
       .filter((ft) => ft.loadId === load.id)
       .reduce(
@@ -68,11 +68,14 @@ export default async function DailyMonitoringPage(props: {
         {} as Record<string, number>,
       );
 
-    return {
-      ...load,
-      feedStock, // This object looks like { BOOSTER: 50, STARTER: 120 }
-    };
+    return { ...load, feedStock };
   });
+
+  const loadsWithStock = mappedLoads.filter((load) =>
+    Object.values(load.feedStock).some((qty) => qty > 0),
+  );
+
+  const activeLoads = mappedLoads.filter((load) => load.isActive);
 
   // ==============================================================================
   // 2. SETUP CASCADING FILTERS INFRASTRUCTURE
@@ -85,7 +88,6 @@ export default async function DailyMonitoringPage(props: {
   const uniqueFarmNames = Array.from(
     new Set(infrastructure.map((i) => i.farmName)),
   );
-
   const availableBuildingsForFilter =
     selectedFarm && selectedFarm !== "all"
       ? Array.from(
@@ -126,15 +128,16 @@ export default async function DailyMonitoringPage(props: {
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
   // ==============================================================================
-  // 5. FETCH HISTORY (JOINED WITH FEED TRANSACTIONS)
+  // 5. FETCH HISTORY (FIXED THE SQL FAN-OUT BUG)
   // ==============================================================================
   const history = await db
     .select({
       id: dailyRecords.id,
+      loadId: dailyRecords.loadId,
       date: dailyRecords.recordDate,
       mortality: dailyRecords.mortality,
       feeds: dailyRecords.feedsConsumed,
-      feedType: feedTransactions.feedType, // Pulling the specific type of feed used
+      feedType: feedTransactions.feedType,
       remarks: dailyRecords.remarks,
       staffName: users.name,
       buildingName: buildings.name,
@@ -145,13 +148,12 @@ export default async function DailyMonitoringPage(props: {
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
     .innerJoin(farms, eq(buildings.farmId, farms.id))
     .leftJoin(users, eq(dailyRecords.recordedBy, users.id))
-    // Join logic: Match the log to the inventory subtraction for that same day/building
+    // THE FIX: Strictly link the Daily Record ID to the secret remark in Feed Transactions!
     .leftJoin(
       feedTransactions,
-      and(
-        eq(feedTransactions.loadId, dailyRecords.loadId),
-        eq(feedTransactions.transactionDate, dailyRecords.recordDate),
-        eq(feedTransactions.transactionType, "DAILY_CONSUMPTION"),
+      eq(
+        feedTransactions.remarks,
+        sql`CONCAT('DAILY_LOG_', ${dailyRecords.id})`,
       ),
     )
     .where(finalCondition)
@@ -161,7 +163,6 @@ export default async function DailyMonitoringPage(props: {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto px-4 py-8">
-      {/* PREMIUM HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-card border border-border/50 p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
         <div>
@@ -173,8 +174,10 @@ export default async function DailyMonitoringPage(props: {
           </p>
         </div>
 
-        {/* Pass the upgraded activeLoads (with feedStock attached) to the modal */}
-        <AddDailyRecordModal activeLoads={activeLoads} />
+        <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
+          <LogMortalityModal activeLoads={activeLoads} />
+          <LogFeedsModal activeLoads={activeLoads} />
+        </div>
       </div>
 
       <MonitoringTableClient

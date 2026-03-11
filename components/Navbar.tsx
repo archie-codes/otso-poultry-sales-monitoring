@@ -20,9 +20,10 @@ import {
   Activity,
   Tractor,
   FileBarChart,
-  Archive, // <-- NEW
-  Users, // <-- NEW
-  ShieldAlert, // <-- NEW
+  Archive,
+  Users,
+  ShieldAlert,
+  Package, // <-- NEW: Added Package icon for Inventory
 } from "lucide-react";
 
 // Shadcn Sheet components for the slide-out drawer
@@ -33,7 +34,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-// NEW: Import the NotificationBell component
+// Import the NotificationBell component
 import NotificationBell from "./NotificationBell";
 
 // Custom Hen Icon Component to match Sidebar
@@ -66,6 +67,8 @@ const ownerGroups = [
         href: "/production/monitoring",
         icon: Activity,
       },
+      // --- NEW ROUTE ---
+      { name: "Feed Inventory", href: "/inventory", icon: Package },
     ],
   },
   {
@@ -96,6 +99,8 @@ const staffGroups = [
         icon: Activity,
       },
       { name: "Expenses", href: "/expenses", icon: TrendingDown },
+      // --- NEW ROUTE ---
+      { name: "Feed Inventory", href: "/inventory", icon: Package },
     ],
   },
 ];

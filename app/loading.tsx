@@ -1,128 +1,72 @@
-import { MapPin } from "lucide-react";
 import Image from "next/image";
 
 export default function Loading() {
   return (
-    <div className="min-h-[70vh] w-full flex flex-col items-center justify-center p-6 text-center">
+    <div className="min-h-[80vh] w-full flex flex-col items-center justify-center p-6 text-center bg-background/50 backdrop-blur-sm">
       <style>{`
-        @keyframes chicken-bob {
-          0%, 100% { transform: translateY(0) rotate(-2deg); }
-          50% { transform: translateY(-5px) rotate(2deg); }
+        @keyframes hen-bob {
+          0%, 100% { transform: translateY(0) rotate(-1deg); }
+          50% { transform: translateY(-12px) rotate(1deg); }
         }
-        @keyframes left-leg-walk {
-          0%, 100% { transform: rotate(15deg); }
-          50% { transform: rotate(-25deg); }
+        @keyframes shadow-pulse {
+          0%, 100% { transform: scale(1); opacity: 0.3; }
+          50% { transform: scale(0.8); opacity: 0.1; }
         }
-        @keyframes right-leg-walk {
-          0%, 100% { transform: rotate(-25deg); }
-          50% { transform: rotate(15deg); }
+        @keyframes loading-bar {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
         }
       `}</style>
 
-      <div className="flex flex-col items-center gap-5 animate-in fade-in duration-500 relative">
-        {/* The Walking Chicken */}
-        <div
-          className="relative text-blue-600 drop-shadow-lg"
-          style={{ animation: "chicken-bob 0.7s infinite ease-in-out" }}
-        >
-          <svg viewBox="0 0 100 100" className="w-24 h-24" fill="currentColor">
-            {/* Body */}
-            <path d="M78 45C78 62 64.5 76 48 76C31.5 76 18 62 18 45C18 28 31.5 14 48 14C64.5 14 78 28 78 45Z" />
-            {/* Beak */}
-            <path d="M88 43L78 48L78 38L88 43Z" className="text-amber-500" />
-            {/* Eye */}
-            <circle cx="68" cy="38" r="4" className="text-white" />
-            <circle cx="70" cy="38" r="1.5" className="text-slate-900" />
-            {/* Comb */}
-            <path
-              d="M55 8C55 8 58 2 63 4C68 6 64 12 64 12C64 12 70 10 72 13C74 16 68 20 68 20"
-              className="text-red-500"
+      <div className="flex flex-col items-center animate-in fade-in duration-700">
+        {/* MASCOT CONTAINER */}
+        <div className="relative mb-3">
+          {/* THE HEN SVG MASCOT */}
+          <div
+            className="relative z-10"
+            style={{ animation: "hen-bob 2s infinite ease-in-out" }}
+          >
+            <Image
+              src="/hen.svg" // <-- Now using the SVG version
+              alt="Otso Poultry Mascot"
+              width={70}
+              height={70}
+              className="drop-shadow-xl"
+              priority
             />
-            {/* Wattle */}
-            <path
-              d="M75 50C75 50 78 55 75 58C72 61 70 56 70 56"
-              className="text-red-600"
-            />
-            {/* Wing */}
-            <path
-              d="M48 65C58 65 65 57 65 48C65 39 58 31 48 31"
-              className="text-blue-700/80"
-            />
+          </div>
 
-            {/* Left Leg */}
-            <g
-              style={{
-                animation: "left-leg-walk 0.7s infinite ease-in-out",
-                transformOrigin: "48px 76px",
-              }}
-            >
-              <rect
-                x="45"
-                y="76"
-                width="6"
-                height="16"
-                className="text-amber-500"
-                rx="2"
-              />
-              <rect
-                x="41"
-                y="88"
-                width="14"
-                height="4"
-                className="text-amber-600"
-                rx="2"
-              />
-            </g>
-
-            {/* Right Leg */}
-            <g
-              style={{
-                animation: "right-leg-walk 0.7s infinite ease-in-out",
-                transformOrigin: "51px 76px",
-              }}
-            >
-              <rect
-                x="49"
-                y="76"
-                width="6"
-                height="16"
-                className="text-amber-500"
-                rx="2"
-              />
-              <rect
-                x="45"
-                y="88"
-                width="14"
-                height="4"
-                className="text-amber-600"
-                rx="2"
-              />
-            </g>
-          </svg>
-
-          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-20 h-2 bg-blue-100 dark:bg-blue-900/30 rounded-full blur-md opacity-70 -z-10"></div>
+          {/* SOFT SHADOW PULSE */}
+          <div
+            className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-20 h-3 bg-foreground/10 rounded-[100%] blur-md"
+            style={{ animation: "shadow-pulse 2s infinite ease-in-out" }}
+          ></div>
         </div>
 
-        {/* Minimalist Loading Text */}
-        <div className="flex items-center gap-1.5 opacity-70">
-          <span className="text-xs font-bold uppercase tracking-[0.25em] text-muted-foreground animate-pulse">
+        {/* LOADING TEXT & DOTS */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-black uppercase tracking-[0.3em] text-foreground/80 flex items-center justify-center gap-1">
             Loading
-          </span>
-          {/* Three tiny bouncing dots */}
-          <span className="flex gap-0.5 pt-0.5">
-            <span
-              className="w-1 h-1 rounded-full bg-muted-foreground animate-bounce"
-              style={{ animationDelay: "0ms" }}
-            ></span>
-            <span
-              className="w-1 h-1 rounded-full bg-muted-foreground animate-bounce"
-              style={{ animationDelay: "150ms" }}
-            ></span>
-            <span
-              className="w-1 h-1 rounded-full bg-muted-foreground animate-bounce"
-              style={{ animationDelay: "300ms" }}
-            ></span>
-          </span>
+            <span className="flex gap-1 ml-1 pt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-bounce [animation-delay:-0.3s]"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-bounce [animation-delay:-0.15s]"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-bounce"></span>
+            </span>
+          </h3>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-60">
+            Fetching Poultry Records
+          </p>
+        </div>
+
+        {/* PREMIUM AMBER SHIMMER BAR */}
+        <div className="mt-8 w-48 h-1 bg-muted rounded-full overflow-hidden relative border border-border/20">
+          <div
+            className="absolute inset-0 bg-linear-to-r from-transparent via-amber-500/50 to-transparent"
+            style={{
+              animation: "loading-bar 1.5s infinite linear",
+              width: "100%",
+            }}
+          ></div>
         </div>
       </div>
     </div>

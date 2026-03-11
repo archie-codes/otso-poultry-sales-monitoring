@@ -15,7 +15,6 @@ import { MapPin } from "lucide-react";
 import Image from "next/image";
 import henIcon from "@/public/hen.svg";
 import AddLoadModal from "./AddLoadModal";
-import LogFeedDeliveryModal from "./LogFeedDeliveryModal"; // <--- NEW MODAL
 import LoadCard from "./LoadCard";
 
 const HenIcon = ({ className }: { className?: string }) => (
@@ -146,9 +145,6 @@ export default async function LoadingPage() {
 
         {/* CASCADING BUTTONS */}
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          {/* Feed Delivery (Now Global) */}
-          <LogFeedDeliveryModal activeLoads={activeLoads} />
-
           {/* Load New Chicks */}
           <AddLoadModal availableBuildings={trulyAvailableBuildings} />
         </div>

@@ -1,26 +1,33 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useTransition, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { format, parseISO } from "date-fns";
-import { cn } from "@/lib/utils";
 import {
   Filter,
+  X,
+  Loader2,
   ChevronLeft,
   ChevronRight,
-  Home,
+  ArrowDownToLine,
+  ArrowRightLeft,
+  Activity,
   Check,
   ChevronsUpDown,
-  Loader2,
   CalendarIcon,
+  Warehouse,
   ChevronDown,
-  X,
+  MapPin,
+  Home,
   Building2,
-  Activity,
-  Wheat,
-  HeartPulse,
 } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Command,
   CommandEmpty,
@@ -29,80 +36,58 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import RecordActions from "./RecordActions";
-import Link from "next/link";
 
-export default function MonitoringTableClient({
+export default function InventoryTableClient({
   history,
   farms,
   buildings,
   totalPages,
   currentPage,
-  userRole,
 }: {
   history: any[];
   farms: string[];
   buildings: string[];
   totalPages: number;
   currentPage: number;
-  userRole: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
 
   const selectedFarm = searchParams.get("farm") || "all";
-  const selectedBuilding = searchParams.get("building") || "all";
+  const selectedBuilding = searchParams.get("building") || "all"; // Added Building state
+  const selectedType = searchParams.get("type") || "all";
   const selectedDateParam = searchParams.get("date");
   const selectedDate =
     selectedDateParam && selectedDateParam !== "all"
       ? parseISO(selectedDateParam)
       : undefined;
 
-  const newIdFromUrl = searchParams.get("newId");
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
-
-  // Client-Side Tab State
-  const [activeTab, setActiveTab] = useState("all");
-
-  useEffect(() => {
-    if (newIdFromUrl) {
-      setHighlightedId(newIdFromUrl);
-
-      const timer = setTimeout(() => {
-        setHighlightedId(null);
-        const params = new URLSearchParams(window.location.search);
-        params.delete("newId");
-        router.replace(`?${params.toString()}`, { scroll: false });
-      }, 3000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [newIdFromUrl, router]);
-
   const [openFarm, setOpenFarm] = useState(false);
-  const [openBuilding, setOpenBuilding] = useState(false);
+  const [openBuilding, setOpenBuilding] = useState(false); // Added Building state
+  const [openType, setOpenType] = useState(false);
   const [openDate, setOpenDate] = useState(false);
-  const [isPending, startTransition] = useTransition();
 
-  const hasActiveFilters =
-    selectedFarm !== "all" || selectedBuilding !== "all" || !!selectedDate;
+  const typeOptions = [
+    { label: "Deliveries", value: "DELIVERY_IN" },
+    { label: "Daily Usage", value: "DAILY_CONSUMPTION" },
+    { label: "Transfers In", value: "TRANSFER_IN" },
+    { label: "Transfers Out", value: "TRANSFER_OUT" },
+  ];
 
-  const updateFilter = (type: "farm" | "building" | "date", value: string) => {
+  const updateFilter = (
+    type: "farm" | "building" | "type" | "date",
+    value: string,
+  ) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value === "all" || value === "") {
       params.delete(type);
-      if (type === "farm") params.delete("building");
+      if (type === "farm") params.delete("building"); // Reset building if farm changes
     } else {
       params.set(type, value);
-      if (type === "farm") params.delete("building");
+      if (type === "farm") params.delete("building"); // Reset building if farm changes
     }
     params.set("page", "1");
     startTransition(() => {
@@ -124,63 +109,71 @@ export default function MonitoringTableClient({
     });
   };
 
-  // Filter the data based on the active tab
-  const filteredHistory = history.filter((record) => {
-    if (activeTab === "mortality") return record.mortality > 0;
-    if (activeTab === "feeds") return record.feeds > 0;
-    return true; // "all"
-  });
+  const hasActiveFilters =
+    selectedFarm !== "all" ||
+    selectedBuilding !== "all" ||
+    selectedType !== "all" ||
+    !!selectedDate;
+
+  const getTransactionBadge = (type: string) => {
+    switch (type) {
+      case "DELIVERY_IN":
+        return (
+          <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-1.5 w-fit">
+            <ArrowDownToLine className="w-3 h-3" /> Delivery
+          </span>
+        );
+      case "TRANSFER_IN":
+        return (
+          <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-1.5 w-fit">
+            <ArrowRightLeft className="w-3 h-3" /> Transfer In
+          </span>
+        );
+      case "TRANSFER_OUT":
+        return (
+          <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-1.5 w-fit">
+            <ArrowRightLeft className="w-3 h-3" /> Transfer Out
+          </span>
+        );
+      case "DAILY_CONSUMPTION":
+        return (
+          <span className="bg-red-100 text-red-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase flex items-center justify-center gap-1.5 w-fit">
+            <Activity className="w-3 h-3" /> Consumed
+          </span>
+        );
+      default:
+        return (
+          <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg text-[10px] font-black uppercase w-fit">
+            {type}
+          </span>
+        );
+    }
+  };
+
+  const formatMoney = (amount: number) =>
+    `₱${amount.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
 
   return (
     <div className="bg-card border border-border/50 rounded-[2.5rem] overflow-hidden shadow-sm flex flex-col relative">
-      {/* 1. BULLETPROOF HEADER WITH TABS & FILTERS */}
+      {/* 1. BULLETPROOF FILTER HEADER */}
       <div className="px-5 py-4 border-b border-border/50 bg-slate-50/50 dark:bg-slate-900/20 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
-        {/* Left Side: Title & Tabs */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full xl:w-auto shrink-0">
-          <div className="flex items-center gap-3">
-            <h2 className="font-black text-foreground text-lg uppercase tracking-tight">
-              Activity Logs
-            </h2>
-            {isPending && (
-              <Loader2 className="w-5 h-5 text-emerald-500 animate-spin" />
-            )}
-          </div>
-
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full sm:w-auto"
-          >
-            <TabsList className="h-10 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl p-1 flex">
-              <TabsTrigger
-                value="all"
-                className="flex-1 sm:flex-none rounded-lg text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm px-4 transition-all"
-              >
-                <Activity className="w-3.5 h-3.5 mr-1.5 opacity-70 hidden sm:block" />{" "}
-                All
-              </TabsTrigger>
-              <TabsTrigger
-                value="mortality"
-                className="flex-1 sm:flex-none rounded-lg text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-red-50 data-[state=active]:text-red-600 data-[state=active]:shadow-sm px-4 transition-all"
-              >
-                <HeartPulse className="w-3.5 h-3.5 mr-1.5 opacity-70 hidden sm:block" />{" "}
-                Mortality
-              </TabsTrigger>
-              <TabsTrigger
-                value="feeds"
-                className="flex-1 sm:flex-none rounded-lg text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-amber-50 data-[state=active]:text-amber-600 data-[state=active]:shadow-sm px-4 transition-all"
-              >
-                <Wheat className="w-3.5 h-3.5 mr-1.5 opacity-70 hidden sm:block" />{" "}
-                Feeds
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+        {/* TITLE ALWAYS ON LEFT/TOP */}
+        <div className="flex items-center gap-3 shrink-0">
+          <h2 className="font-black text-foreground text-lg uppercase tracking-tight">
+            Transaction Ledger
+          </h2>
+          {isPending && (
+            <Loader2 className="w-5 h-5 text-amber-500 animate-spin" />
+          )}
         </div>
 
-        {/* Right Side: Filters */}
-        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto xl:justify-end">
-          {/* DATE FILTER */}
-          <div className="flex-1 min-w-[110px] max-w-[180px] bg-white dark:bg-slate-950 rounded-xl border border-border transition-all">
+        {/* FILTERS CONTAINER (Grid on mobile, flex row on laptop) */}
+        <div className="grid grid-cols-2 md:flex md:flex-wrap items-center gap-2 w-full xl:w-auto xl:justify-end">
+          {/* EXACT DATE PICKER */}
+          <div className="bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 transition-all w-full md:w-[130px]">
             <Popover open={openDate} onOpenChange={setOpenDate}>
               <PopoverTrigger asChild>
                 <Button
@@ -218,8 +211,8 @@ export default function MonitoringTableClient({
             </Popover>
           </div>
 
-          {/* FARM FILTER */}
-          <div className="flex-1 min-w-[110px] max-w-[180px] bg-white dark:bg-slate-950 rounded-xl border border-border transition-all">
+          {/* FARM COMBOBOX */}
+          <div className="bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 transition-all w-full md:w-[130px]">
             <Popover open={openFarm} onOpenChange={setOpenFarm}>
               <PopoverTrigger asChild>
                 <Button
@@ -254,7 +247,7 @@ export default function MonitoringTableClient({
                           className={cn(
                             "mr-2 h-3.5 w-3.5",
                             selectedFarm === "all"
-                              ? "opacity-100 text-emerald-600"
+                              ? "opacity-100 text-amber-600"
                               : "opacity-0",
                           )}
                         />{" "}
@@ -273,7 +266,7 @@ export default function MonitoringTableClient({
                             className={cn(
                               "mr-2 h-3.5 w-3.5",
                               selectedFarm === f
-                                ? "opacity-100 text-emerald-600"
+                                ? "opacity-100 text-amber-600"
                                 : "opacity-0",
                             )}
                           />{" "}
@@ -287,21 +280,23 @@ export default function MonitoringTableClient({
             </Popover>
           </div>
 
-          {/* BUILDING FILTER */}
-          <div className="flex-1 min-w-[110px] max-w-[180px] bg-white dark:bg-slate-950 rounded-xl border border-border transition-all">
+          {/* BUILDING COMBOBOX */}
+          <div className="bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 transition-all w-full md:w-[130px]">
             <Popover open={openBuilding} onOpenChange={setOpenBuilding}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
                   disabled={selectedFarm === "all"}
-                  className="w-full justify-between h-10 px-3 font-bold uppercase tracking-wider text-[10px] disabled:opacity-30"
+                  className="w-full justify-between h-10 px-3 font-bold uppercase tracking-wider text-[10px] disabled:opacity-50"
                 >
                   <div className="flex items-center truncate">
                     <Home className="w-3.5 h-3.5 mr-1.5 shrink-0 text-slate-400" />
                     <span className="truncate">
-                      {selectedBuilding === "all"
+                      {selectedFarm === "all"
                         ? "BUILDING"
-                        : selectedBuilding}
+                        : selectedBuilding === "all"
+                          ? "ALL BLDGS"
+                          : selectedBuilding}
                     </span>
                   </div>
                   <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -326,7 +321,7 @@ export default function MonitoringTableClient({
                           className={cn(
                             "mr-2 h-3.5 w-3.5",
                             selectedBuilding === "all"
-                              ? "opacity-100 text-emerald-600"
+                              ? "opacity-100 text-amber-600"
                               : "opacity-0",
                           )}
                         />{" "}
@@ -345,7 +340,7 @@ export default function MonitoringTableClient({
                             className={cn(
                               "mr-2 h-3.5 w-3.5",
                               selectedBuilding === b
-                                ? "opacity-100 text-emerald-600"
+                                ? "opacity-100 text-amber-600"
                                 : "opacity-0",
                             )}
                           />{" "}
@@ -359,24 +354,92 @@ export default function MonitoringTableClient({
             </Popover>
           </div>
 
-          {/* CLEAR FILTERS */}
+          {/* TYPE FILTER */}
+          <div className="bg-white dark:bg-slate-950 rounded-xl border border-border shrink-0 transition-all w-full md:w-[130px]">
+            <Popover open={openType} onOpenChange={setOpenType}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between h-10 px-3 font-bold uppercase tracking-wider text-[10px]"
+                >
+                  <div className="flex items-center truncate">
+                    <Filter className="w-3.5 h-3.5 mr-1.5 shrink-0 text-slate-400" />
+                    <span className="truncate">
+                      {selectedType === "all"
+                        ? "ACTION"
+                        : typeOptions.find((t) => t.value === selectedType)
+                            ?.label}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0 rounded-xl shadow-xl border-border">
+                <Command>
+                  <CommandList>
+                    <CommandGroup>
+                      <CommandItem
+                        onSelect={() => {
+                          updateFilter("type", "all");
+                          setOpenType(false);
+                        }}
+                        className="text-[10px] font-bold uppercase cursor-pointer py-2.5"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-3.5 w-3.5",
+                            selectedType === "all"
+                              ? "opacity-100 text-amber-600"
+                              : "opacity-0",
+                          )}
+                        />{" "}
+                        ALL ACTIONS
+                      </CommandItem>
+                      {typeOptions.map((t) => (
+                        <CommandItem
+                          key={t.value}
+                          onSelect={() => {
+                            updateFilter("type", t.value);
+                            setOpenType(false);
+                          }}
+                          className="text-[10px] font-bold uppercase cursor-pointer py-2.5"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-3.5 w-3.5",
+                              selectedType === t.value
+                                ? "opacity-100 text-amber-600"
+                                : "opacity-0",
+                            )}
+                          />{" "}
+                          {t.label}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* CLEAR FILTERS BUTTON */}
           {hasActiveFilters && (
             <Button
               variant="ghost"
               onClick={resetFilters}
-              className="h-10 px-3 rounded-xl text-[10px] font-black uppercase text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+              className="col-span-2 md:col-span-1 h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 shrink-0 border border-transparent hover:border-red-100"
             >
-              <X className="w-3.5 h-3.5 mr-1" /> Reset
+              <X className="w-3.5 h-3.5 mr-1.5" /> Reset
             </Button>
           )}
         </div>
       </div>
 
-      {/* 2. TABLE CONTENT */}
+      {/* TABLE CONTENT */}
       <div
         className={cn(
           "overflow-x-auto min-h-[400px] transition-opacity duration-300",
-          isPending && "opacity-50 pointer-events-none",
+          isPending && "opacity-50",
         )}
       >
         <table className="w-full text-sm text-left border-collapse">
@@ -388,128 +451,100 @@ export default function MonitoringTableClient({
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground whitespace-nowrap">
                 Location
               </th>
-
-              {/* Dynamic Headers */}
-              {activeTab !== "feeds" && (
-                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-red-500 text-center whitespace-nowrap">
-                  Mortality
-                </th>
-              )}
-              {activeTab !== "mortality" && (
-                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-amber-600 text-center whitespace-nowrap">
-                  Feeds
-                </th>
-              )}
-
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground whitespace-nowrap">
-                Recorded By
+                Action
+              </th>
+              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground whitespace-nowrap">
+                Feed Type
+              </th>
+              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-right whitespace-nowrap">
+                Cost/Sack
+              </th>
+              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-right whitespace-nowrap">
+                Qty
               </th>
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right whitespace-nowrap">
-                Actions
+                Remarks/Staff
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
-            {filteredHistory.length === 0 ? (
+            {history.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="px-6 py-20 text-center text-muted-foreground font-black uppercase tracking-widest opacity-20"
                 >
                   <div className="flex flex-col items-center gap-2">
                     <Filter className="w-8 h-8" />
-                    No {activeTab !== "all" ? activeTab : "daily"} records found
+                    No transactions found
                   </div>
                 </td>
               </tr>
             ) : (
-              filteredHistory.map((record) => (
+              history.map((record) => (
                 <tr
                   key={record.id}
-                  className={cn(
-                    "group transition-all duration-700",
-                    highlightedId === String(record.id)
-                      ? "bg-emerald-50 dark:bg-emerald-900/20"
-                      : "hover:bg-slate-50/50 dark:hover:bg-slate-900/10",
-                  )}
+                  className="hover:bg-slate-50/50 transition-colors"
                 >
-                  {/* DATE */}
                   <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900 dark:text-slate-100">
                     {format(new Date(record.date), "MMM d, yyyy")}
                   </td>
-
-                  {/* LOCATION */}
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Link
-                      href={`/production/monitoring/${record.loadId}`}
-                      className="font-black block text-xs uppercase text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
-                    >
+                    <span className="font-black block text-xs uppercase">
                       {record.buildingName}
-                    </Link>
+                    </span>
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5 block">
                       {record.farmName}
                     </span>
                   </td>
-
-                  {/* MORTALITY CELL (Hidden if Feeds Tab) */}
-                  {activeTab !== "feeds" && (
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {record.mortality > 0 ? (
-                        <span className="inline-flex items-center justify-center px-3 py-1 rounded-lg text-xs font-black bg-red-50 text-red-600">
-                          {record.mortality}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300 dark:text-slate-600 font-black">
-                          -
-                        </span>
-                      )}
-                    </td>
-                  )}
-
-                  {/* FEEDS CELL (Hidden if Mortality Tab) */}
-                  {activeTab !== "mortality" && (
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {record.feeds > 0 ? (
-                        <div className="flex flex-col items-center">
-                          <div className="text-sm font-black text-slate-900 dark:text-slate-100">
-                            {record.feeds}{" "}
-                            <span className="text-[10px] text-slate-400 font-bold uppercase">
-                              Bags
-                            </span>
-                          </div>
-                          {record.feedType && (
-                            <span
-                              className={cn(
-                                "mt-1 px-2 py-0.5 rounded-md text-[9px] font-black border uppercase tracking-wider",
-                                record.feedType === "BOOSTER"
-                                  ? "bg-indigo-50 text-indigo-600 border-indigo-100"
-                                  : record.feedType === "STARTER"
-                                    ? "bg-amber-50 text-amber-600 border-amber-100"
-                                    : record.feedType === "GROWER"
-                                      ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                                      : "bg-slate-50 text-slate-500 border-slate-100",
-                              )}
-                            >
-                              {record.feedType}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-300 dark:text-slate-600 font-black">
-                          -
-                        </span>
-                      )}
-                    </td>
-                  )}
-
-                  {/* RECORDED BY */}
-                  <td className="px-6 py-4 whitespace-nowrap text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                    {record.staffName || "System"}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getTransactionBadge(record.type)}
                   </td>
-
-                  {/* ACTIONS */}
-                  <td className="px-6 py-4 text-right">
-                    <RecordActions record={record} userRole={userRole} />
+                  <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-700">
+                    {record.feedType && (
+                      <span
+                        className={cn(
+                          "px-2 py-1 rounded-md text-[9px] font-black border uppercase tracking-wider",
+                          record.feedType === "BOOSTER"
+                            ? "bg-indigo-50 text-indigo-600 border-indigo-100"
+                            : record.feedType === "STARTER"
+                              ? "bg-amber-50 text-amber-600 border-amber-100"
+                              : record.feedType === "GROWER"
+                                ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                : "bg-slate-50 text-slate-500 border-slate-100",
+                        )}
+                      >
+                        {record.feedType}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-600 text-right">
+                    {Number(record.costPerBag) > 0
+                      ? formatMoney(Number(record.costPerBag))
+                      : "-"}
+                  </td>
+                  <td
+                    className={cn(
+                      "px-6 py-4 whitespace-nowrap font-black text-right text-base",
+                      Number(record.quantity) > 0
+                        ? "text-emerald-600"
+                        : "text-red-600",
+                    )}
+                  >
+                    {Number(record.quantity) > 0 ? "+" : ""}
+                    {record.quantity}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right flex flex-col items-end">
+                    <span
+                      className="block text-xs font-medium text-slate-600 truncate max-w-[200px]"
+                      title={record.remarks || ""}
+                    >
+                      {record.remarks || "-"}
+                    </span>
+                    <span className="block text-[9px] font-black uppercase tracking-widest text-muted-foreground mt-1">
+                      {record.staffName || "System"}
+                    </span>
                   </td>
                 </tr>
               ))
@@ -518,7 +553,7 @@ export default function MonitoringTableClient({
         </table>
       </div>
 
-      {/* 3. PAGINATION FOOTER */}
+      {/* PAGINATION FOOTER */}
       <div className="px-6 py-4 border-t border-border/50 bg-slate-50/30 flex flex-col sm:flex-row items-center justify-between gap-4">
         <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
           Page {currentPage} of {totalPages || 1}
@@ -529,7 +564,7 @@ export default function MonitoringTableClient({
             size="sm"
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage <= 1 || isPending}
-            className="h-9 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest shadow-sm"
+            className="h-9 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest"
           >
             <ChevronLeft className="w-4 h-4 mr-1" /> Prev
           </Button>
@@ -538,7 +573,7 @@ export default function MonitoringTableClient({
             size="sm"
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage >= totalPages || isPending}
-            className="h-9 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest shadow-sm"
+            className="h-9 px-4 rounded-xl font-bold uppercase text-[10px] tracking-widest"
           >
             Next <ChevronRight className="w-4 h-4 ml-1" />
           </Button>

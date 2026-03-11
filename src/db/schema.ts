@@ -19,6 +19,8 @@ export const expenseTypeEnum = pgEnum("expense_type", [
   "chick_purchase",
   "feeds",
   "medicine",
+  "vaccine",
+  "antibiotics",
   "labor",
   "electricity",
   "water",

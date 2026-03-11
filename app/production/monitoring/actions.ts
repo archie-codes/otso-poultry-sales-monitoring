@@ -9,7 +9,8 @@ import {
   loads,
   buildings,
 } from "../../../src/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+// Added 'inArray' for the Transfer Fix
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../lib/auth";
@@ -45,7 +46,7 @@ export async function addDailyRecord(formData: FormData) {
   if (!loadId || !recordDate) return { error: "Missing required fields." };
 
   try {
-    // 1. SMART PRICE LOOKUP: Find the exact cost per bag from the delivery
+    // 1. SMART PRICE LOOKUP: Find the exact cost per bag from Delivery OR Transfer
     let lastDelivery = await db
       .select({
         costPerBag: feedTransactions.costPerBag,
@@ -58,7 +59,10 @@ export async function addDailyRecord(formData: FormData) {
         and(
           eq(feedTransactions.loadId, loadId),
           eq(feedTransactions.feedType, feedType), // Try exact feed type first
-          eq(feedTransactions.transactionType, "DELIVERY_IN"),
+          inArray(feedTransactions.transactionType, [
+            "DELIVERY_IN",
+            "TRANSFER_IN",
+          ]), // <--- THE FIX
         ),
       )
       .orderBy(desc(feedTransactions.createdAt))
@@ -78,7 +82,10 @@ export async function addDailyRecord(formData: FormData) {
         .where(
           and(
             eq(feedTransactions.loadId, loadId),
-            eq(feedTransactions.transactionType, "DELIVERY_IN"),
+            inArray(feedTransactions.transactionType, [
+              "DELIVERY_IN",
+              "TRANSFER_IN",
+            ]), // <--- THE FIX
           ),
         )
         .orderBy(desc(feedTransactions.createdAt))
@@ -110,6 +117,7 @@ export async function addDailyRecord(formData: FormData) {
         feedType,
         transactionType: "DAILY_CONSUMPTION",
         quantity: -qtyNum,
+        costPerBag: String(costPerBag),
         transactionDate: recordDate,
         recordedBy: userId,
         remarks: `DAILY_LOG_${newRecord.id}`,
@@ -200,5 +208,85 @@ export async function updateDailyRecord(id: number, formData: FormData) {
     return { success: true, updatedId: id };
   } catch (error) {
     return { error: "Failed to update record." };
+  }
+}
+
+// ==========================================
+// 4. NEW: TRANSFER FEED STOCK ACTION
+// ==========================================
+export async function transferFeedStock(formData: FormData) {
+  const userId = await getAuthUserId();
+  if (!userId) return { error: "Unauthorized." };
+
+  const sourceLoadId = Number(formData.get("sourceLoadId"));
+  const targetLoadId = Number(formData.get("targetLoadId"));
+  const feedType = formData.get("feedType") as string;
+  const quantity = Number(formData.get("quantity"));
+  const transferDate = formData.get("transferDate") as string;
+  const remarks = formData.get("remarks") as string;
+
+  if (
+    !sourceLoadId ||
+    !targetLoadId ||
+    !feedType ||
+    !quantity ||
+    !transferDate
+  ) {
+    return { error: "Missing required fields." };
+  }
+  if (sourceLoadId === targetLoadId) {
+    return { error: "Cannot transfer to the same building." };
+  }
+
+  try {
+    // 1. Get the cost value of the feed from the SOURCE building so we can carry it over
+    const lastDelivery = await db
+      .select({ costPerBag: feedTransactions.costPerBag })
+      .from(feedTransactions)
+      .where(
+        and(
+          eq(feedTransactions.loadId, sourceLoadId),
+          eq(feedTransactions.feedType, feedType),
+          inArray(feedTransactions.transactionType, [
+            "DELIVERY_IN",
+            "TRANSFER_IN",
+          ]),
+        ),
+      )
+      .orderBy(desc(feedTransactions.createdAt))
+      .limit(1);
+
+    // THE FIX: Use "0" (a string) because Drizzle maps numeric database columns to strings!
+    const costPerBag = lastDelivery[0]?.costPerBag || "0";
+
+    // 2. DEDUCT from Source Building (TRANSFER_OUT)
+    await db.insert(feedTransactions).values({
+      loadId: sourceLoadId,
+      feedType,
+      transactionType: "TRANSFER_OUT",
+      quantity: -quantity, // Negative
+      costPerBag,
+      transactionDate: transferDate,
+      recordedBy: userId,
+      remarks: `Transferred OUT to Load ${targetLoadId}. ${remarks}`,
+    });
+
+    // 3. ADD to Target Building (TRANSFER_IN)
+    await db.insert(feedTransactions).values({
+      loadId: targetLoadId,
+      feedType,
+      transactionType: "TRANSFER_IN",
+      quantity: quantity, // Positive
+      costPerBag, // Passing the price over!
+      transactionDate: transferDate,
+      recordedBy: userId,
+      remarks: `Transferred IN from Load ${sourceLoadId}. ${remarks}`,
+    });
+
+    revalidatePath("/production/monitoring");
+    return { success: true };
+  } catch (error) {
+    console.error("Transfer Error:", error);
+    return { error: "Failed to process transfer." };
   }
 }

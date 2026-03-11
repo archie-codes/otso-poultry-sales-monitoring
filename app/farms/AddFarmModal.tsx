@@ -406,7 +406,9 @@ export default function AddFarmModal() {
                     className="h-11 px-8 rounded-xl font-bold"
                   >
                     {loading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Saving...
+                      </>
                     ) : (
                       <>
                         <Save className="w-4 h-4 mr-2" /> Save Farm
