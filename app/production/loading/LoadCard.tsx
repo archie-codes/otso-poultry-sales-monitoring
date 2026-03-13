@@ -157,7 +157,7 @@ export default function LoadCard({ load }: { load: any }) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Working Capital
+              Initial Capital
             </p>
             {hasCapital ? (
               <p className="text-lg font-black text-foreground truncate">

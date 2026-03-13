@@ -11,7 +11,8 @@ import {
   Check,
   ChevronsUpDown,
   ChevronDown,
-  MapPin, // Added for the Farm icon
+  MapPin,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, addMonths } from "date-fns";
@@ -76,7 +77,7 @@ export default function AddLoadModal({
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // --- NEW: CASCADING SELECTION STATES ---
+  // --- CASCADING SELECTION STATES ---
   const [selectedFarm, setSelectedFarm] = useState("");
   const [openFarmSearch, setOpenFarmSearch] = useState(false);
 
@@ -91,6 +92,10 @@ export default function AddLoadModal({
     addMonths(new Date(), 4),
   );
 
+  // --- NEW: REAL-TIME MATH STATES ---
+  const [quantityInput, setQuantityInput] = useState("");
+  const [pricePerChickInput, setPricePerChickInput] = useState("");
+
   useEffect(() => {
     setMounted(true);
     const handleEsc = (e: KeyboardEvent) => {
@@ -100,13 +105,10 @@ export default function AddLoadModal({
     return () => window.removeEventListener("keydown", handleEsc);
   }, []);
 
-  // --- NEW: SMART FILTERING LOGIC ---
-  // 1. Extract a unique list of Farms from the available buildings
   const uniqueFarms = Array.from(
     new Set(availableBuildings.map((b) => b.farmName)),
   );
 
-  // 2. Filter the buildings based on the selected farm
   const filteredBuildings = selectedFarm
     ? availableBuildings.filter((b) => b.farmName === selectedFarm)
     : [];
@@ -120,8 +122,20 @@ export default function AddLoadModal({
     if (date) setHarvestDate(addMonths(date, 4));
   }
 
+  // --- THE MATH ENGINE ---
+  const cleanQuantity = Number(quantityInput.replace(/,/g, "")) || 0;
+  const cleanPricePerChick = Number(pricePerChickInput.replace(/,/g, "")) || 0;
+  const computedTotalCapital = cleanQuantity * cleanPricePerChick;
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (!selectedFarm) {
+      toast.error("Missing Field", {
+        description: "Please select a farm first.",
+      });
+      return;
+    }
 
     if (!buildingId) {
       toast.error("Missing Field", {
@@ -130,26 +144,51 @@ export default function AddLoadModal({
       return;
     }
 
+    if (!chickType) {
+      toast.error("Missing Field", {
+        description: "Please select the Type of Chick.",
+      });
+      return;
+    }
+
+    // ---> NEW: LOAD DATE SAFETY LOCKS <---
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // Allow any time today
+
+    if (loadDate && loadDate > today) {
+      toast.error("Invalid Timeline", {
+        description: "You cannot set a Load Date in the future.",
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
+      return;
+    }
+
+    if (loadDate && harvestDate && harvestDate <= loadDate) {
+      toast.error("Invalid Timeline", {
+        description: "The estimated harvest date must be AFTER the load date.",
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
+      return;
+    }
+    // --------------------------------------
+
     setLoading(true);
     const formData = new FormData(e.currentTarget);
 
-    // Inject our state variables into the form data
     formData.set("buildingId", buildingId);
     formData.set("chickType", chickType);
     if (loadDate) formData.set("loadDate", format(loadDate, "yyyy-MM-dd"));
     if (harvestDate)
       formData.set("harvestDate", format(harvestDate, "yyyy-MM-dd"));
 
-    // --- NEW: SAFELY STRIP COMMAS BEFORE SENDING TO DB ---
-    const qty = formData.get("actualQuantityLoad") as string;
-    if (qty) formData.set("actualQuantityLoad", qty.replace(/,/g, ""));
+    if (quantityInput)
+      formData.set("actualQuantityLoad", String(cleanQuantity));
 
     const sp = formData.get("sellingPrice") as string;
     if (sp) formData.set("sellingPrice", sp.replace(/,/g, ""));
 
-    const cap = formData.get("initialCapital") as string;
-    if (cap) formData.set("initialCapital", cap.replace(/,/g, ""));
-    // -----------------------------------------------------
+    // Set the automatically computed initial capital
+    formData.set("initialCapital", String(computedTotalCapital));
 
     const result = await addLoad(formData);
 
@@ -168,6 +207,8 @@ export default function AddLoadModal({
       setSelectedFarm("");
       setBuildingId("");
       setChickType("");
+      setQuantityInput("");
+      setPricePerChickInput("");
 
       if (result.id) {
         router.push(`/production/loading?newId=${result.id}`);
@@ -178,7 +219,6 @@ export default function AddLoadModal({
     }
     setLoading(false);
   }
-
   return (
     <>
       <Button
@@ -213,12 +253,10 @@ export default function AddLoadModal({
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* --- TWO-STEP CASCADING DROPDOWNS --- */}
                 <div className="grid md:grid-cols-2 gap-5 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
-                  {/* STEP 1: SELECT FARM */}
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      1. Select Farm *
+                      1. Select Farm <span className="text-red-500">*</span>
                     </label>
                     <Popover
                       open={openFarmSearch}
@@ -258,11 +296,10 @@ export default function AddLoadModal({
                                       ) || currentValue;
 
                                     setSelectedFarm(actualFarm);
-                                    // Reset building when farm changes
                                     setBuildingId("");
                                     setOpenFarmSearch(false);
                                   }}
-                                  className="py-3 px-4"
+                                  className="py-3 px-4 cursor-pointer"
                                 >
                                   <span className="font-bold text-sm">
                                     {farm}
@@ -284,10 +321,9 @@ export default function AddLoadModal({
                     </Popover>
                   </div>
 
-                  {/* STEP 2: SELECT BUILDING */}
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      2. Select Building *
+                      2. Select Building <span className="text-red-500">*</span>
                     </label>
                     <Popover
                       open={openBuildingSearch}
@@ -297,7 +333,7 @@ export default function AddLoadModal({
                         <Button
                           variant="outline"
                           role="combobox"
-                          disabled={!selectedFarm} // Disabled until Farm is picked!
+                          disabled={!selectedFarm}
                           className="w-full h-12 justify-between rounded-xl bg-background border-input px-4 font-normal disabled:opacity-50"
                         >
                           {selectedBuilding ? (
@@ -332,7 +368,7 @@ export default function AddLoadModal({
                                     setBuildingId(String(b.id));
                                     setOpenBuildingSearch(false);
                                   }}
-                                  className="py-3 px-4"
+                                  className="py-3 px-4 cursor-pointer"
                                 >
                                   <span className="font-bold text-sm">
                                     {b.name}
@@ -358,7 +394,7 @@ export default function AddLoadModal({
                 <div className="grid md:grid-cols-2 gap-5">
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      Load Date *
+                      Load Date <span className="text-red-500">*</span>
                     </label>
                     <Popover>
                       <PopoverTrigger asChild>
@@ -382,11 +418,7 @@ export default function AddLoadModal({
                         <Calendar
                           mode="single"
                           selected={loadDate}
-                          onSelect={(date) => {
-                            handleLoadDateChange(date);
-                            // Auto-close calendar hack if you want it!
-                            // document.body.click();
-                          }}
+                          onSelect={handleLoadDateChange}
                           initialFocus
                         />
                       </PopoverContent>
@@ -433,7 +465,7 @@ export default function AddLoadModal({
                 <div className="grid md:grid-cols-2 gap-5">
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                      Type of Chick
+                      Type of Chick <span className="text-red-500">*</span>
                     </label>
                     <Popover
                       open={openChickType}
@@ -470,7 +502,7 @@ export default function AddLoadModal({
                                     setChickType(selectedBreed);
                                     setOpenChickType(false);
                                   }}
-                                  className="py-2.5 px-4"
+                                  className="py-2.5 px-4 cursor-pointer"
                                 >
                                   <Check
                                     className={cn(
@@ -501,40 +533,91 @@ export default function AddLoadModal({
                   </div>
                 </div>
 
-                <div className="grid md:grid-cols-3 gap-4 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-600 dark:text-blue-400">
-                      Quantity *
-                    </label>
-                    <FormattedNumberInput
-                      name="actualQuantityLoad"
-                      required
-                      placeholder="10,000"
-                      className="h-11 rounded-xl bg-background font-bold text-lg"
-                    />
+                {/* FINANCIALS & LIVE MATH ENGINE */}
+                <div className="p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50 space-y-5">
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {/* QUANTITY INPUT */}
+                    <div
+                      className="space-y-2"
+                      onKeyUp={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        if (target.value !== undefined) {
+                          setQuantityInput(target.value);
+                        }
+                      }}
+                    >
+                      <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-600 dark:text-blue-400">
+                        Quantity *
+                      </label>
+                      <FormattedNumberInput
+                        name="actualQuantityLoad"
+                        required
+                        placeholder="e.g. 10,000"
+                        className="h-11 rounded-xl bg-background font-bold text-lg border-blue-200 focus-visible:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* PRICE PER CHICK INPUT */}
+                    <div
+                      className="space-y-2"
+                      onKeyUp={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        if (target.value !== undefined) {
+                          setPricePerChickInput(target.value);
+                        }
+                      }}
+                    >
+                      <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-500">
+                        Price per Chick (₱) *
+                      </label>
+                      <FormattedNumberInput
+                        name="pricePerChick"
+                        required
+                        allowDecimals={true}
+                        placeholder="e.g. 40.00"
+                        className="h-11 rounded-xl bg-background font-bold border-emerald-200 focus-visible:ring-emerald-500"
+                      />
+                    </div>
+
+                    {/* SELLING PRICE INPUT */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                        Target Selling (₱)
+                      </label>
+                      <FormattedNumberInput
+                        name="sellingPrice"
+                        required
+                        placeholder="e.g. 300.00"
+                        allowDecimals={true}
+                        className="h-11 rounded-xl bg-background font-bold"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
-                      Target Selling (₱)
-                    </label>
-                    <FormattedNumberInput
-                      name="sellingPrice"
-                      required
-                      placeholder="210.00"
-                      allowDecimals={true}
-                      className="h-11 rounded-xl bg-background font-bold"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-500">
-                      Capital per Load
-                    </label>
-                    <FormattedNumberInput
-                      name="initialCapital"
-                      placeholder="1,500,000.00"
-                      allowDecimals={true}
-                      className="h-11 rounded-xl bg-background font-bold"
-                    />
+
+                  {/* VISUAL TOTAL CAPITAL DISPLAY */}
+                  <div className="bg-white dark:bg-slate-950 border border-emerald-200 dark:border-emerald-900/50 p-4 rounded-xl flex items-center justify-between shadow-sm transition-all duration-300">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600">
+                        <Wallet className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
+                          Calculated Initial Capital
+                        </p>
+                        <p className="text-xs font-bold text-muted-foreground mt-0.5">
+                          {cleanQuantity > 0 && cleanPricePerChick > 0
+                            ? `${cleanQuantity.toLocaleString()} birds × ₱${cleanPricePerChick.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                            : "Enter Quantity and Price"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                      ₱
+                      {computedTotalCapital.toLocaleString("en-US", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </div>
                   </div>
                 </div>
 
@@ -549,17 +632,17 @@ export default function AddLoadModal({
                   </Button>
                   <Button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || computedTotalCapital <= 0}
                     className="h-12 px-10 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Save &
-                        Activate Load
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />{" "}
+                        Saving...
                       </>
                     ) : (
                       <>
-                        <Save className="mr-2 h-5 w-5" /> Save & Activate Load
+                        <Save className="mr-2 h-5 w-5" /> Save & Load
                       </>
                     )}
                   </Button>

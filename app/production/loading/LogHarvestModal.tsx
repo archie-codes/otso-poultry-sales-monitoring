@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { logHarvest, getLiveBirdCount } from "./actions";
+// ---> FIXED: Imported the new getLoadTotalExpensesForHarvest action <---
+import {
+  logHarvest,
+  getLiveBirdCount,
+  getLoadTotalExpensesForHarvest,
+} from "./actions";
 import {
   Loader2,
   Truck,
@@ -9,7 +14,8 @@ import {
   CheckCircle2,
   CalendarIcon,
   ChevronDown,
-  AlertTriangle, // <-- NEW ICON
+  AlertTriangle,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -38,26 +44,33 @@ export default function LogHarvestModal({ load }: { load: any }) {
   const [loading, setLoading] = useState(false);
 
   const [availableBirds, setAvailableBirds] = useState<number | null>(null);
-  const [fetchingCount, setFetchingCount] = useState(false);
+  // ---> NEW: State to hold the real-time total expenses <---
+  const [totalExpenses, setTotalExpenses] = useState<number | null>(null);
+  const [fetchingData, setFetchingData] = useState(false);
+
   const [successData, setSuccessData] = useState<any>(null);
 
   const [harvestQuantity, setHarvestQuantity] = useState<string>("");
   const [harvestDate, setHarvestDate] = useState<Date | undefined>(new Date());
 
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-
-  // ---> NEW: Track if they manually checked the close building box <---
   const [isManualClose, setIsManualClose] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setFetchingCount(true);
+      setFetchingData(true);
       setHarvestQuantity("");
       setHarvestDate(new Date());
-      setIsManualClose(false); // Reset checkbox on open
-      getLiveBirdCount(load.id).then((count) => {
+      setIsManualClose(false);
+
+      // ---> FIXED: Fetch both birds AND total expenses at the same time <---
+      Promise.all([
+        getLiveBirdCount(load.id),
+        getLoadTotalExpensesForHarvest(load.id),
+      ]).then(([count, expenses]) => {
         setAvailableBirds(count);
-        setFetchingCount(false);
+        setTotalExpenses(expenses);
+        setFetchingData(false);
       });
     } else {
       setTimeout(() => setSuccessData(null), 300);
@@ -90,17 +103,39 @@ export default function LogHarvestModal({ load }: { load: any }) {
       return;
     }
 
+    // ---> DATE SAFETY LOCKS <---
+    const loadDateObj = new Date(load.loadDate);
+    loadDateObj.setHours(0, 0, 0, 0);
+
+    const harvestDateCheck = new Date(harvestDate);
+    harvestDateCheck.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (harvestDateCheck < loadDateObj) {
+      toast.error("Invalid Date", {
+        description: `You cannot harvest before the load date (${format(loadDateObj, "MMM d, yyyy")}).`,
+      });
+      return;
+    }
+
+    if (harvestDateCheck > today) {
+      toast.error("Invalid Date", {
+        description: "You cannot log a harvest for a future date.",
+      });
+      return;
+    }
+    // ----------------------------
+
     const formData = new FormData(e.currentTarget);
     const remainingAfterHarvest = (availableBirds || 0) - cleanQuantity;
 
-    // ---> NEW: THE HARD ERROR HANDLER <---
-    // If they checked the box manually BUT there are still birds left, stop them!
     if (!isAutoFinalHarvest && isManualClose && remainingAfterHarvest > 0) {
       const confirmed = window.confirm(
         `⚠️ WARNING: DISCREPANCY DETECTED ⚠️\n\nYou are closing this building, but the system shows ${remainingAfterHarvest.toLocaleString()} birds are still inside.\n\nAre you absolutely sure this building is completely empty?`,
       );
 
-      // If they click "Cancel" on the popup, stop the save completely!
       if (!confirmed) {
         return;
       }
@@ -214,19 +249,39 @@ export default function LogHarvestModal({ load }: { load: any }) {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-5 bg-card">
-              <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl p-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Info className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  <span className="text-xs font-bold uppercase tracking-widest text-blue-700 dark:text-blue-400">
-                    Current Available
-                  </span>
+              <div className="grid grid-cols-2 gap-3">
+                {/* 1. Live Bird Count */}
+                <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl p-4 flex flex-col justify-center">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Info className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-400">
+                      Live Birds
+                    </span>
+                  </div>
+                  <div className="text-lg font-black text-blue-700 dark:text-blue-400">
+                    {fetchingData ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      `${availableBirds?.toLocaleString()}`
+                    )}
+                  </div>
                 </div>
-                <div className="text-lg font-black text-blue-700 dark:text-blue-400">
-                  {fetchingCount ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    `${availableBirds?.toLocaleString()} Birds`
-                  )}
+
+                {/* 2. REAL Total Expenses */}
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl p-4 flex flex-col justify-center">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Wallet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
+                      Total Capital (Expenses)
+                    </span>
+                  </div>
+                  <div className="text-lg font-black text-emerald-700 dark:text-emerald-400">
+                    {fetchingData ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      `₱${Number(totalExpenses || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -235,7 +290,6 @@ export default function LogHarvestModal({ load }: { load: any }) {
                   <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                     Date of Harvest *
                   </label>
-                  {/* ---> FIXED: Added open and onOpenChange <--- */}
                   <Popover
                     open={isCalendarOpen}
                     onOpenChange={setIsCalendarOpen}
@@ -263,7 +317,6 @@ export default function LogHarvestModal({ load }: { load: any }) {
                       <Calendar
                         mode="single"
                         selected={harvestDate}
-                        // ---> FIXED: Sets the date AND closes the popover instantly! <---
                         onSelect={(date) => {
                           setHarvestDate(date);
                           setIsCalendarOpen(false);
@@ -334,7 +387,6 @@ export default function LogHarvestModal({ load }: { load: any }) {
                 />
               </div>
 
-              {/* THE SMART HARVEST LOGIC BLOCKS */}
               {isExceeding ? (
                 <div className="bg-red-100 border border-red-300 dark:bg-red-950/50 dark:border-red-900/50 rounded-xl p-4 flex items-start gap-3 mt-4 animate-in fade-in zoom-in-95 duration-300">
                   <div className="mt-0.5 w-5 h-5 flex items-center justify-center bg-red-500 rounded-full text-white shrink-0 font-black text-xs">
@@ -365,7 +417,6 @@ export default function LogHarvestModal({ load }: { load: any }) {
                   <input type="hidden" name="isFinalHarvest" value="on" />
                 </div>
               ) : (
-                // ---> NEW: The Checkbox UI turns angry if clicked improperly! <---
                 <div
                   className={cn(
                     "rounded-xl p-4 flex flex-col gap-3 mt-4 animate-in fade-in duration-300 transition-colors",
@@ -401,7 +452,6 @@ export default function LogHarvestModal({ load }: { load: any }) {
                     </label>
                   </div>
 
-                  {/* The Visual Warning! */}
                   {isDiscrepancy && (
                     <div className="bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300 p-3 rounded-lg text-xs font-bold flex gap-2 items-start border border-red-200 dark:border-red-900/50 animate-in slide-in-from-top-2">
                       <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
@@ -417,7 +467,7 @@ export default function LogHarvestModal({ load }: { load: any }) {
                 </div>
               )}
 
-              <div className="flex justify-end gap-3 pt-4">
+              <div className="flex justify-end gap-3 pt-4 border-t border-border/50">
                 <Button
                   type="button"
                   variant="ghost"
@@ -428,14 +478,16 @@ export default function LogHarvestModal({ load }: { load: any }) {
                 </Button>
                 <Button
                   type="submit"
-                  // ---> FIXED: Button is completely disabled if there's a discrepancy! <---
                   disabled={
-                    loading || fetchingCount || isExceeding || isDiscrepancy
+                    loading || fetchingData || isExceeding || isDiscrepancy
                   }
                   className="rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-8 h-11"
                 >
                   {loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="ml-2">Saving...</span>
+                    </>
                   ) : (
                     "Save Harvest"
                   )}

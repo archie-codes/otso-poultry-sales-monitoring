@@ -16,6 +16,7 @@ import { eq, sum } from "drizzle-orm";
 // Added authentication imports here:
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../lib/auth";
+import { getLoadTotalCosts } from "@/lib/finance-logic";
 
 // ==========================================
 // ADD NEW LOAD
@@ -428,5 +429,15 @@ export async function transferFeeds(formData: FormData) {
   } catch (error) {
     console.error("Transfer Error:", error);
     return { error: "Failed to complete feed transfer." };
+  }
+}
+
+export async function getLoadTotalExpensesForHarvest(loadId: number) {
+  try {
+    const costs = await getLoadTotalCosts(loadId);
+    return costs.total; // Returns the grand total of chicks, feeds, and meds
+  } catch (error) {
+    console.error("Failed to fetch total expenses:", error);
+    return 0;
   }
 }

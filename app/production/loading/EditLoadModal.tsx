@@ -95,16 +95,49 @@ export default function EditLoadModal({
       return;
     }
 
+    // ---> NEW: EDIT DATE SAFETY LOCKS <---
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // Allow any time today
+
+    if (loadDate > today) {
+      toast.error("Invalid Timeline", {
+        description: "You cannot set a Load Date in the future.",
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
+      return;
+    }
+
+    if (harvestDate && harvestDate <= loadDate) {
+      toast.error("Invalid Timeline", {
+        description: "The estimated harvest date must be AFTER the load date.",
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
+      return;
+    }
+    // --------------------------------------
+
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    formData.append("id", load.id);
-    formData.append("chickType", chickType);
+    formData.set("id", load.id);
+    formData.set("chickType", chickType);
 
-    // Convert Dates back to strings for the database action
-    formData.append("loadDate", loadDate.toISOString().split("T")[0]);
+    // SAFELY STRIP COMMAS FROM FORMATTED INPUTS
+    const rawQuantity = formData.get("quantity") as string;
+    if (rawQuantity) formData.set("quantity", rawQuantity.replace(/,/g, ""));
+
+    const rawSellingPrice = formData.get("sellingPrice") as string;
+    if (rawSellingPrice)
+      formData.set("sellingPrice", rawSellingPrice.replace(/,/g, ""));
+
+    const rawCapital = formData.get("initialCapital") as string;
+    if (rawCapital)
+      formData.set("initialCapital", rawCapital.replace(/,/g, ""));
+
+    // Format dates cleanly using date-fns to avoid timezone shifts
+    formData.set("loadDate", format(loadDate, "yyyy-MM-dd"));
     if (harvestDate) {
-      formData.append("harvestDate", harvestDate.toISOString().split("T")[0]);
+      formData.set("harvestDate", format(harvestDate, "yyyy-MM-dd"));
     }
 
     const result = await updateLoad(formData);
@@ -116,7 +149,7 @@ export default function EditLoadModal({
       });
     } else {
       toast.success("Success!", {
-        description: "Load details saved and building activated.",
+        description: "Load details successfully updated.",
         style: { backgroundColor: "blue", color: "white", border: "none" },
       });
       setIsOpen(false);
@@ -291,7 +324,7 @@ export default function EditLoadModal({
               <Input
                 name="customerName"
                 type="text"
-                defaultValue={load.customer || ""}
+                defaultValue={load.customerName || load.customer || ""}
                 placeholder="e.g. Magnolia"
                 className="rounded-xl h-12"
               />
@@ -307,7 +340,7 @@ export default function EditLoadModal({
               <FormattedNumberInput
                 name="quantity"
                 required
-                defaultValue={load.quantity}
+                defaultValue={load.quantity || load.actualQuantityLoad}
                 placeholder="10,000"
                 className="h-11 rounded-xl bg-background font-bold text-lg"
               />

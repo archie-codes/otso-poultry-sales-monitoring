@@ -383,7 +383,7 @@ export default async function ReportsPage() {
                             </div>
                             <div>
                               <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                                Capital
+                                Initial Capital
                               </p>
                               <p className="text-lg sm:text-xl font-black text-foreground">
                                 {formatMoney(Number(report.initialCapital))}

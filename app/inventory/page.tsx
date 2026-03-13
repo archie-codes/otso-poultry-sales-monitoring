@@ -102,7 +102,22 @@ export default async function InventoryPage(props: {
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
     .innerJoin(farms, eq(buildings.farmId, farms.id));
 
-  const activeLoads = allLoadsRaw.filter((l) => l.isActive);
+  const activeLoads = allLoadsRaw
+    .filter((l) => l.isActive)
+    .map((load) => {
+      const feedStock = allTransactions
+        .filter((t) => t.loadId === load.id)
+        .reduce(
+          (acc, t) => {
+            if (t.feedType) {
+              acc[t.feedType] = (acc[t.feedType] || 0) + Number(t.quantity);
+            }
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+      return { ...load, feedStock };
+    });
 
   const loadsWithStock = allLoadsRaw
     .map((load) => {

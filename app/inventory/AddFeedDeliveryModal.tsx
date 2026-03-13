@@ -6,14 +6,14 @@ import { logFeedDelivery } from "./actions";
 import {
   X,
   Loader2,
-  Save,
   ArrowDownToLine,
-  Package,
   CalendarIcon,
   Check,
   ChevronsUpDown,
   ChevronDown,
   FileText,
+  MapPin, // Added for Farm
+  Home, // Added for Building
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -47,32 +47,64 @@ export default function AddFeedDeliveryModal({
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  const [loadId, setLoadId] = useState("");
+  // --- NEW CASCADING STATES ---
+  const [selectedFarm, setSelectedFarm] = useState("");
+  const [openFarmSearch, setOpenFarmSearch] = useState(false);
+
+  const [loadId, setLoadId] = useState(""); // Represents the active building
+  const [openBuildingSearch, setOpenBuildingSearch] = useState(false);
+
   const [feedType, setFeedType] = useState("");
+  const [openType, setOpenType] = useState(false);
+
   const [deliveryDate, setDeliveryDate] = useState<Date | undefined>(
     new Date(),
   );
-
-  const [openLoad, setOpenLoad] = useState(false);
-  const [openType, setOpenType] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const feedTypes = ["BOOSTER", "STARTER", "GROWER", "FINISHER"];
 
   useEffect(() => setMounted(true), []);
 
-  const selectedLoad = activeLoads.find((l) => String(l.id) === loadId);
+  // --- SMART FILTERING LOGIC ---
+  // 1. Get unique farms that currently have active loads
+  const uniqueFarms = Array.from(
+    new Set(activeLoads.map((load) => load.farmName)),
+  );
 
-  // Group active loads by Farm for easier selection
-  const groupedLoads = activeLoads.reduce((acc: any, load) => {
-    if (!acc[load.farmName]) acc[load.farmName] = [];
-    acc[load.farmName].push(load);
-    return acc;
-  }, {});
+  // 2. Filter loads based on the selected farm
+  const filteredLoads = selectedFarm
+    ? activeLoads.filter((load) => load.farmName === selectedFarm)
+    : [];
+
+  const selectedLoad = activeLoads.find((l) => String(l.id) === loadId);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!loadId || !feedType || !deliveryDate) {
-      toast.error("Please select Building, Feed Type, and Date.");
+
+    // VALIDATION
+    if (!selectedFarm) {
+      toast.error("Missing Field", {
+        description: "Please select a Farm first.",
+      });
+      return;
+    }
+    if (!loadId) {
+      toast.error("Missing Field", {
+        description: "Please select a Target Building.",
+      });
+      return;
+    }
+    if (!feedType) {
+      toast.error("Missing Field", {
+        description: "Please select a Feed Type.",
+      });
+      return;
+    }
+    if (!deliveryDate) {
+      toast.error("Missing Field", {
+        description: "Please select a Delivery Date.",
+      });
       return;
     }
 
@@ -82,11 +114,20 @@ export default function AddFeedDeliveryModal({
     formData.set("feedType", feedType);
     formData.set("transactionDate", format(deliveryDate, "yyyy-MM-dd"));
 
+    // Ensure we strip commas before sending to DB
+    const qty = formData.get("quantity") as string;
+    if (qty) formData.set("quantity", qty.replace(/,/g, ""));
+    const cost = formData.get("costPerBag") as string;
+    if (cost) formData.set("costPerBag", cost.replace(/,/g, ""));
+
     const result = await logFeedDelivery(formData);
-    if (result.error) toast.error(result.error);
-    else {
+
+    if (result.error) {
+      toast.error("Error", { description: result.error });
+    } else {
       toast.success("Delivery Logged Successfully!");
       setIsOpen(false);
+      setSelectedFarm("");
       setLoadId("");
       setFeedType("");
       setDeliveryDate(new Date());
@@ -99,7 +140,7 @@ export default function AddFeedDeliveryModal({
     <>
       <Button
         onClick={() => setIsOpen(true)}
-        className="h-11 px-5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+        className="h-11 px-5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all active:scale-95"
       >
         <ArrowDownToLine className="w-4 h-4 mr-2" /> Log Delivery
       </Button>
@@ -107,120 +148,84 @@ export default function AddFeedDeliveryModal({
       {isOpen &&
         mounted &&
         createPortal(
-          <div className="fixed inset-0 z-100 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="fixed z-101 w-full max-w-lg border bg-background p-6 shadow-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto custom-scrollbar">
-              <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-xl font-black text-emerald-600 flex items-center">
-                  <ArrowDownToLine className="mr-2" /> Receive Feeds
-                </h2>
+          <div className="fixed inset-0 z-100 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="fixed z-101 w-full max-w-2xl border border-border/50 bg-background p-6 shadow-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto custom-scrollbar">
+              {/* HEADER */}
+              <div className="flex justify-between items-center mb-6 border-b border-border/50 pb-4 sticky top-0 bg-background z-10">
+                <div>
+                  <h2 className="text-xl font-black text-emerald-600 flex items-center gap-2">
+                    <ArrowDownToLine className="w-5 h-5" /> Receive Feeds
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Log incoming feed deliveries to an active building.
+                  </p>
+                </div>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="p-2 rounded-full hover:bg-secondary"
+                  className="p-2 rounded-full hover:bg-secondary transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {/* TARGET BUILDING */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-muted-foreground">
-                    Deliver To (Building)
-                  </label>
-                  <Popover open={openLoad} onOpenChange={setOpenLoad}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full h-11 justify-between rounded-xl font-bold bg-emerald-50/30"
-                      >
-                        {selectedLoad
-                          ? `${selectedLoad.buildingName} (${selectedLoad.farmName})`
-                          : "Select active building..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
-                      <Command>
-                        <CommandInput placeholder="Search building..." />
-                        <CommandList className="max-h-[300px] custom-scrollbar">
-                          <CommandEmpty>
-                            No active buildings found.
-                          </CommandEmpty>
-                          {Object.entries(groupedLoads).map(
-                            ([farmName, loads]: [string, any]) => (
-                              <CommandGroup
-                                key={farmName}
-                                heading={farmName}
-                                className="text-emerald-600 font-black tracking-widest"
-                              >
-                                {loads.map((l: any) => (
-                                  <CommandItem
-                                    key={l.id}
-                                    value={`${l.farmName} ${l.buildingName} ${l.id}`}
-                                    onSelect={() => {
-                                      setLoadId(String(l.id));
-                                      setOpenLoad(false);
-                                    }}
-                                    className="cursor-pointer py-2.5"
-                                  >
-                                    <span className="font-bold text-foreground text-sm">
-                                      {l.buildingName}
-                                    </span>
-                                    <Check
-                                      className={cn(
-                                        "ml-auto h-4 w-4",
-                                        loadId === String(l.id)
-                                          ? "opacity-100 text-emerald-600"
-                                          : "opacity-0",
-                                      )}
-                                    />
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            ),
-                          )}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* FEED TYPE & DATE */}
-                <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* 1. TWO-STEP CASCADING DROPDOWNS (FARM -> BUILDING) */}
+                <div className="grid md:grid-cols-2 gap-5 p-5 bg-emerald-50/30 dark:bg-emerald-950/10 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                  {/* STEP 1: SELECT FARM */}
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-muted-foreground">
-                      Feed Type
+                    <label className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
+                      1. Select Farm <span className="text-red-500">*</span>
                     </label>
-                    <Popover open={openType} onOpenChange={setOpenType}>
+                    <Popover
+                      open={openFarmSearch}
+                      onOpenChange={setOpenFarmSearch}
+                    >
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
-                          className="w-full h-11 justify-between rounded-xl font-bold"
+                          role="combobox"
+                          className="w-full h-[46px] justify-between rounded-xl bg-background border-input px-4 font-normal shadow-sm"
                         >
-                          {feedType || "Select..."}{" "}
-                          <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
+                            <span className="truncate font-bold text-sm">
+                              {selectedFarm || "Choose a Farm..."}
+                            </span>
+                          </div>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
+                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200 shadow-xl">
                         <Command>
-                          <CommandList>
+                          <CommandInput placeholder="Search farm..." />
+                          <CommandList className="max-h-[200px] custom-scrollbar">
+                            <CommandEmpty>No active farms found.</CommandEmpty>
                             <CommandGroup>
-                              {feedTypes.map((type) => (
+                              {uniqueFarms.map((farm) => (
                                 <CommandItem
-                                  key={type}
-                                  value={type}
-                                  onSelect={() => {
-                                    setFeedType(type);
-                                    setOpenType(false);
+                                  key={farm}
+                                  value={farm}
+                                  onSelect={(currentValue) => {
+                                    const actualFarm =
+                                      uniqueFarms.find(
+                                        (f) =>
+                                          f.toLowerCase() ===
+                                          currentValue.toLowerCase(),
+                                      ) || currentValue;
+                                    setSelectedFarm(actualFarm);
+                                    setLoadId(""); // Reset building when farm changes!
+                                    setOpenFarmSearch(false);
                                   }}
-                                  className="font-bold"
+                                  className="py-3 px-4 cursor-pointer"
                                 >
-                                  {type}
+                                  <span className="font-bold text-sm">
+                                    {farm}
+                                  </span>
                                   <Check
                                     className={cn(
-                                      "ml-auto h-4 w-4",
-                                      feedType === type
-                                        ? "opacity-100 text-emerald-600"
+                                      "ml-auto h-4 w-4 text-emerald-600",
+                                      selectedFarm === farm
+                                        ? "opacity-100"
                                         : "opacity-0",
                                     )}
                                   />
@@ -232,104 +237,282 @@ export default function AddFeedDeliveryModal({
                       </PopoverContent>
                     </Popover>
                   </div>
+
+                  {/* STEP 2: SELECT BUILDING */}
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-muted-foreground">
-                      Date Received
+                    <label className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
+                      2. Deliver To Building{" "}
+                      <span className="text-red-500">*</span>
                     </label>
-                    <Popover>
+                    <Popover
+                      open={openBuildingSearch}
+                      onOpenChange={setOpenBuildingSearch}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          disabled={!selectedFarm}
+                          className="w-full h-[46px] justify-between rounded-xl bg-background border-input px-4 font-normal disabled:opacity-50 shadow-sm"
+                        >
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <Home className="h-4 w-4 text-emerald-600 shrink-0" />
+                            {selectedLoad ? (
+                              <span className="font-bold text-sm truncate">
+                                {selectedLoad.buildingName}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground truncate">
+                                {selectedFarm
+                                  ? "Choose a Building..."
+                                  : "Pick a Farm first"}
+                              </span>
+                            )}
+                          </div>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200 shadow-xl">
+                        <Command>
+                          <CommandInput placeholder="Search building..." />
+                          <CommandList className="max-h-[200px] custom-scrollbar">
+                            <CommandEmpty>
+                              No active buildings found.
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {filteredLoads.map((load) => (
+                                <CommandItem
+                                  key={load.id}
+                                  value={load.buildingName}
+                                  onSelect={() => {
+                                    setLoadId(String(load.id));
+                                    setOpenBuildingSearch(false);
+                                  }}
+                                  className="py-3 px-4 cursor-pointer"
+                                >
+                                  <span className="font-bold text-sm">
+                                    {load.buildingName}
+                                  </span>
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4 text-emerald-600",
+                                      loadId === String(load.id)
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                {/* 2. FEED TYPE & DATE */}
+                <div className="grid grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      Feed Type <span className="text-red-500">*</span>
+                    </label>
+                    <Popover open={openType} onOpenChange={setOpenType}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full h-[46px] justify-between rounded-xl font-bold bg-background border-input shadow-sm"
+                        >
+                          <span className="truncate">
+                            {feedType || "Select feed type..."}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 opacity-50 shrink-0" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
+                        <Command>
+                          <CommandList>
+                            <CommandGroup>
+                              {feedTypes.map((type) => {
+                                // Calculate stock for this specific type in the selected building
+                                const currentStock =
+                                  selectedLoad?.feedStock?.[type] || 0;
+
+                                return (
+                                  <CommandItem
+                                    key={type}
+                                    value={type}
+                                    onSelect={() => {
+                                      setFeedType(type);
+                                      setOpenType(false);
+                                    }}
+                                    className="font-bold py-2.5 cursor-pointer flex justify-between items-center w-full"
+                                  >
+                                    <span
+                                      className={cn(
+                                        feedType === type
+                                          ? "text-emerald-600"
+                                          : "",
+                                      )}
+                                    >
+                                      {type}
+                                    </span>
+
+                                    <div className="flex items-center gap-3">
+                                      {/* DYNAMIC STOCK BADGE */}
+                                      {selectedLoad ? (
+                                        <span
+                                          className={cn(
+                                            "text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest",
+                                            currentStock > 0
+                                              ? "bg-amber-100 text-amber-700"
+                                              : "bg-slate-100 text-slate-400",
+                                          )}
+                                        >
+                                          {currentStock} Sacks
+                                        </span>
+                                      ) : (
+                                        <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest bg-slate-50 text-slate-300">
+                                          Select Bldg
+                                        </span>
+                                      )}
+
+                                      <Check
+                                        className={cn(
+                                          "h-4 w-4 text-emerald-600",
+                                          feedType === type
+                                            ? "opacity-100"
+                                            : "opacity-0",
+                                        )}
+                                      />
+                                    </div>
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      Date Received <span className="text-red-500">*</span>
+                    </label>
+                    <Popover
+                      open={isCalendarOpen}
+                      onOpenChange={setIsCalendarOpen}
+                    >
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           className={cn(
-                            "w-full h-11 rounded-xl justify-start font-bold",
+                            "w-full h-[46px] rounded-xl justify-between font-bold bg-background border-input shadow-sm transition-none",
                             !deliveryDate && "text-muted-foreground",
                           )}
                         >
-                          <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
-                          {deliveryDate
-                            ? format(deliveryDate, "MMM d, yyyy")
-                            : "Pick a date"}
+                          <div className="flex items-center truncate">
+                            <CalendarIcon className="mr-2 h-4 w-4 opacity-70 shrink-0" />
+                            <span className="truncate">
+                              {deliveryDate
+                                ? format(deliveryDate, "MMM d, yyyy")
+                                : "Pick a date"}
+                            </span>
+                          </div>
+                          <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 z-200">
+                      <PopoverContent
+                        className="w-auto p-0 z-200"
+                        align="start"
+                      >
                         <Calendar
                           mode="single"
                           selected={deliveryDate}
-                          onSelect={setDeliveryDate}
+                          onSelect={(date) => {
+                            setDeliveryDate(date);
+                            setIsCalendarOpen(false); // Auto close
+                          }}
                           disabled={(date) => date > new Date()}
+                          initialFocus
                         />
                       </PopoverContent>
                     </Popover>
                   </div>
                 </div>
 
-                {/* FINANCIALS (QTY & COST) */}
-                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
+                {/* 3. FINANCIALS (QTY & COST) */}
+                <div className="grid grid-cols-2 gap-5 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
-                      Total Sacks
+                    <label className="text-[10px] font-black uppercase tracking-[0.15em] text-emerald-600">
+                      Total Sacks <span className="text-red-500">*</span>
                     </label>
-                    <Input
-                      type="number"
+                    <FormattedNumberInput
                       name="quantity"
-                      min="1"
                       required
-                      className="h-11 rounded-xl font-bold border-input"
                       placeholder="e.g., 50"
+                      className="h-12 rounded-xl bg-background font-bold text-lg border-emerald-200 focus-visible:ring-emerald-500"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
-                      Cost Per Bag (₱)
+                    <label className="text-[10px] font-black uppercase tracking-[0.15em] text-emerald-600">
+                      Cost Per Bag (₱) <span className="text-red-500">*</span>
                     </label>
                     <FormattedNumberInput
                       name="costPerBag"
                       required
                       allowDecimals={true}
-                      placeholder="1100.00"
-                      className="h-11 rounded-xl font-bold bg-white"
+                      placeholder="1,100.00"
+                      className="h-12 rounded-xl font-bold bg-background border-emerald-200 focus-visible:ring-emerald-500"
                     />
                   </div>
                 </div>
 
-                {/* DR & REMARKS */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-muted-foreground flex items-center gap-1">
-                    <FileText className="w-3 h-3" /> Delivery Receipt No.
-                  </label>
-                  <Input
-                    name="referenceNumber"
-                    placeholder="e.g. DR-10293 (Optional)"
-                    className="h-11 rounded-xl"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase text-muted-foreground">
-                    Remarks / Supplier
-                  </label>
-                  <Input
-                    name="remarks"
-                    placeholder="e.g. B-MEG Supplies"
-                    className="h-11 rounded-xl"
-                  />
+                {/* 4. DR & REMARKS */}
+                <div className="grid grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                      <FileText className="w-3 h-3" /> Delivery Receipt No.
+                    </label>
+                    <Input
+                      name="referenceNumber"
+                      placeholder="e.g. DR-10293"
+                      className="h-[46px] rounded-xl bg-background shadow-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      Remarks / Supplier
+                    </label>
+                    <Input
+                      name="remarks"
+                      placeholder="e.g. B-MEG Supplies"
+                      className="h-[46px] rounded-xl bg-background shadow-sm"
+                    />
+                  </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t">
+                {/* FOOTER BUTTONS */}
+                <div className="flex justify-end gap-3 pt-6 border-t border-border/50 mt-2">
                   <Button
                     type="button"
                     variant="ghost"
                     onClick={() => setIsOpen(false)}
-                    className="h-11 px-6 rounded-xl font-bold"
+                    className="h-12 px-6 rounded-xl font-bold"
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="h-11 px-8 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className="h-12 px-8 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 dark:shadow-none transition-all active:scale-95"
                   >
                     {loading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" />{" "}
+                        Saving...
+                      </>
                     ) : (
                       "Save Delivery"
                     )}

@@ -38,6 +38,7 @@ export default async function ExpensesPage(props: {
       id: loads.id,
       farmId: farms.id,
       buildingName: buildings.name,
+      loadDate: loads.loadDate,
     })
     .from(loads)
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))

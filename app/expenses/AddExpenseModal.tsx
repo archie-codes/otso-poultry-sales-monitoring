@@ -37,7 +37,6 @@ import { FormattedNumberInput } from "@/components/ui/FormattedNumberInput";
 import { Textarea } from "@/components/ui/textarea";
 
 // --- STRICT DB MAPPING CATEGORIES ---
-// The 'value' must strictly match what your DB schema expects!
 const SHARED_CATEGORIES = [
   { label: "Electricity", value: "electricity" },
   { label: "Water", value: "water" },
@@ -51,7 +50,6 @@ const INDIVIDUAL_CATEGORIES = [
   { label: "Medicine", value: "medicine" },
   { label: "Vaccine", value: "vaccine" },
   { label: "Antibiotics", value: "antibiotics" },
-  { label: "Chick Purchase", value: "chick_purchase" },
 ];
 
 export default function AddExpenseModal({
@@ -77,7 +75,7 @@ export default function AddExpenseModal({
     (load) => load.farmId === Number(farmId),
   );
 
-  // LOGIC: Check if current category is a division/shared expense by checking values
+  // LOGIC: Check if current category is a division/shared expense
   const isSharedExpense = SHARED_CATEGORIES.some(
     (cat) => cat.value === expenseType,
   );
@@ -111,14 +109,65 @@ export default function AddExpenseModal({
       return;
     }
 
+    // ---> FOOLPROOF DATE SAFETY LOCKS <---
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // Allow any time today
+
+    // 1. Block Future Expenses
+    if (expenseDate.getTime() > today.getTime()) {
+      toast.error("Invalid Date", {
+        description: "Expense date cannot be in the future.",
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
+      return;
+    }
+
+    // 2. Block "Ghost Medicines" (Expenses before chicks arrived)
+    if (!isSharedExpense && loadId) {
+      const targetLoad = availableLoads.find((l) => String(l.id) === loadId);
+
+      if (targetLoad) {
+        // ---> DEV CHECK: Make sure the parent page actually passed the loadDate! <---
+        if (!targetLoad.loadDate) {
+          toast.error("System Developer Error", {
+            description:
+              "The 'loadDate' is missing from the activeLoads prop. Please add 'loadDate: loads.loadDate' to your db.select() query in the parent page!",
+            style: { backgroundColor: "black", color: "white", border: "none" },
+          });
+          return;
+        }
+
+        const loadDateObj = new Date(targetLoad.loadDate);
+        loadDateObj.setHours(0, 0, 0, 0); // Reset to midnight
+
+        const expenseDateCheck = new Date(expenseDate);
+        expenseDateCheck.setHours(0, 0, 0, 0); // Reset to midnight
+
+        // Use .getTime() for strict integer comparison!
+        if (expenseDateCheck.getTime() < loadDateObj.getTime()) {
+          toast.error("Invalid Timeline", {
+            description: `This building wasn't loaded until ${format(loadDateObj, "MMM d, yyyy")}. You cannot log a direct expense before this date.`,
+            style: { backgroundColor: "red", color: "white", border: "none" },
+          });
+          return;
+        }
+      }
+    }
+    // ---------------------------------
+
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
     formData.set("farmId", farmId);
-    // Force to 'shared' if it's a division cost, else attach specific building ID
+
+    // Send 'shared' (NULL in DB) for division costs, otherwise send specific ID
     formData.set("loadId", isSharedExpense ? "shared" : loadId);
     formData.set("expenseType", expenseType);
     formData.set("expenseDate", format(expenseDate, "yyyy-MM-dd"));
+
+    // STRIP COMMAS FROM FORMATTED INPUT
+    const rawAmount = formData.get("amount") as string;
+    if (rawAmount) formData.set("amount", rawAmount.replace(/,/g, ""));
 
     const result = await addExpense(formData);
 
@@ -184,7 +233,6 @@ export default function AddExpenseModal({
                         setLoadId("");
                       }}
                     >
-                      {/* FIXED: Exact height, padding, and border forced */}
                       <SelectTrigger className="w-full h-[46px] rounded-xl border border-input bg-background px-4 py-2 text-sm font-normal focus:ring-red-500 flex items-center justify-between shadow-sm">
                         <SelectValue placeholder="-- Farm --" />
                       </SelectTrigger>
@@ -208,7 +256,6 @@ export default function AddExpenseModal({
                     </label>
                     <Popover>
                       <PopoverTrigger asChild>
-                        {/* FIXED: Removed variant="outline" to stop it from fighting the custom border. Exact same height and padding as Select. */}
                         <Button
                           type="button"
                           className={cn(
@@ -237,7 +284,7 @@ export default function AddExpenseModal({
                   </div>
                 </div>
 
-                {/* 2. CATEGORY SELECTOR (Grouped) */}
+                {/* 2. CATEGORY SELECTOR */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold">
                     Expense Category <span className="text-red-500">*</span>
@@ -276,23 +323,51 @@ export default function AddExpenseModal({
                 {expenseType && (
                   <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                     {isSharedExpense ? (
-                      // DIVISION BANNER
-                      <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl p-4 flex gap-3 items-start">
+                      // ---> NEW: SMART DIVISION BANNER <---
+                      <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl p-4 flex gap-3 items-start shadow-inner">
                         <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-sm font-bold text-blue-800 dark:text-blue-300">
-                            Division Computation
+                          <p className="text-sm font-black text-blue-800 dark:text-blue-300">
+                            {availableLoads.length === 1
+                              ? "100% Allocation"
+                              : "Automatic Division"}
                           </p>
-                          <p className="text-xs text-blue-600/80 dark:text-blue-400 mt-1 leading-snug">
+                          <p className="text-xs text-blue-700/80 dark:text-blue-400 mt-1 leading-relaxed">
                             <strong>{displayLabel}</strong> is an overhead cost.
-                            It will be automatically split among all active
-                            buildings.
+                            {availableLoads.length === 1 ? (
+                              <>
+                                {" "}
+                                Because{" "}
+                                <strong>
+                                  {availableLoads[0].buildingName}
+                                </strong>{" "}
+                                is the only active building right now, the
+                                system will apply <strong>100%</strong> of this
+                                cost to it.
+                              </>
+                            ) : availableLoads.length > 1 ? (
+                              <>
+                                {" "}
+                                The system will automatically divide this cost
+                                evenly among the{" "}
+                                <strong>
+                                  {availableLoads.length} active buildings
+                                </strong>
+                                .
+                              </>
+                            ) : (
+                              <>
+                                {" "}
+                                The system will record this as a general farm
+                                expense.
+                              </>
+                            )}
                           </p>
                         </div>
                       </div>
                     ) : (
                       // INDIVIDUAL BUILDING SELECTOR
-                      <div className="space-y-2 p-4 bg-secondary/20 rounded-xl border border-border/50">
+                      <div className="space-y-2 p-4 bg-emerald-50/50 dark:bg-emerald-950/10 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
                         <label className="text-sm font-semibold text-emerald-700 dark:text-emerald-500">
                           Which building is this for?{" "}
                           <span className="text-red-500">*</span>
@@ -338,7 +413,7 @@ export default function AddExpenseModal({
                   </div>
                 )}
 
-                {/* 4. AMOUNT & REMARKS (Disabled remarks form input since it isn't in DB yet) */}
+                {/* 4. AMOUNT */}
                 <div className="grid grid-cols-1 gap-4 pt-2">
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-red-600 dark:text-red-400">
@@ -352,19 +427,6 @@ export default function AddExpenseModal({
                       className="h-14 rounded-xl bg-background font-black text-2xl px-4 border-red-200 focus-visible:ring-red-500 placeholder:text-muted-foreground/50"
                     />
                   </div>
-
-                  {/* Commented out remarks as it is not supported in DB schema yet! */}
-                  {/* <div className="space-y-2">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Receipt / Remarks (Optional)
-                    </label>
-                    <Textarea 
-                      name="remarks" 
-                      placeholder="Add invoice number, vendor name, or specific notes..." 
-                      rows={2} 
-                      className="rounded-xl resize-none px-4 py-3 bg-background" 
-                    />
-                  </div> */}
                 </div>
 
                 {/* SUBMIT */}
