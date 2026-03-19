@@ -3,32 +3,49 @@ import {
   expenses,
   loads,
   buildings,
-  dailyRecords,
-  feedTransactions,
+  feedAllocations, // <--- NEW TIER 2
+  feedDeliveries, // <--- NEW TIER 1
 } from "../src/db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 
 export async function getLoadTotalCosts(loadId: number) {
-  // 1. Get basic info
+  // 1. Get basic info & Initial Capital (Chicks)
   const loadData = await db
-    .select({ farmId: buildings.farmId })
+    .select({
+      farmId: buildings.farmId,
+      initialCapital: loads.initialCapital,
+    })
     .from(loads)
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
     .where(eq(loads.id, loadId))
     .limit(1);
 
   if (loadData.length === 0)
-    return { directCosts: 0, sharedCosts: 0, feedCosts: 0, total: 0 };
-  const farmId = loadData[0].farmId;
+    return {
+      directCosts: 0,
+      sharedCosts: 0,
+      feedCosts: 0,
+      initialCapital: 0,
+      total: 0,
+    };
 
-  // 2. DIRECT COSTS (Vaccines, etc. from Expenses Table)
+  const farmId = loadData[0].farmId;
+  const initialCapital = Number(loadData[0].initialCapital) || 0;
+
+  // 2. DIRECT COSTS (Vaccines, Labor, etc.)
+  // We exclude 'chick_purchase' because those are already counted in initialCapital!
   const directResult = await db
     .select({ total: sql<number>`sum(cast(${expenses.amount} as numeric))` })
     .from(expenses)
-    .where(eq(expenses.loadId, loadId));
+    .where(
+      and(
+        eq(expenses.loadId, loadId),
+        sql`${expenses.expenseType} != 'chick_purchase'`,
+      ),
+    );
   const directCosts = Number(directResult[0]?.total || 0);
 
-  // 3. SHARED COSTS (Electricity, etc. divided by active buildings)
+  // 3. SHARED COSTS (Electricity, Water, divided by active buildings)
   const sharedFarmResult = await db
     .select({ total: sql<number>`sum(cast(${expenses.amount} as numeric))` })
     .from(expenses)
@@ -43,26 +60,31 @@ export async function getLoadTotalCosts(loadId: number) {
   const divisor = Number(activeLoadsCount[0]?.count || 1);
   const sharedCosts = Number(sharedFarmResult[0]?.total || 0) / divisor;
 
-  // 4. FEED COSTS (Fetched from Daily Monitoring + Inventory Price)
-  // We sum (sacks consumed * cost per sack) from the monitoring records
-  const feedResult = await db
+  // 4. EXACT FEED COSTS (NEW TWO-TIER SYSTEM)
+  // Sacks allocated to this building * Original Supplier Unit Price
+  const allocations = await db
     .select({
-      total: sql<number>`sum(cast(${dailyRecords.feedsConsumed} as numeric) * cast(${feedTransactions.costPerBag} as numeric))`,
+      allocatedQty: feedAllocations.allocatedQuantity,
+      unitPrice: feedDeliveries.unitPrice,
     })
-    .from(dailyRecords)
+    .from(feedAllocations)
     .innerJoin(
-      feedTransactions,
-      eq(dailyRecords.loadId, feedTransactions.loadId),
+      feedDeliveries,
+      eq(feedAllocations.deliveryId, feedDeliveries.id),
     )
-    // Note: This logic assumes the price comes from the latest delivery for that load
-    .where(eq(dailyRecords.loadId, loadId));
+    .where(eq(feedAllocations.loadId, loadId));
 
-  const feedCosts = Number(feedResult[0]?.total || 0);
+  const feedCosts = allocations.reduce(
+    (sum, a) => sum + a.allocatedQty * Number(a.unitPrice),
+    0,
+  );
 
+  // 5. THE GRAND TOTAL FOR MA'AM LANI
   return {
     directCosts,
     sharedCosts,
     feedCosts,
-    total: directCosts + sharedCosts + feedCosts,
+    initialCapital,
+    total: initialCapital + directCosts + sharedCosts + feedCosts,
   };
 }

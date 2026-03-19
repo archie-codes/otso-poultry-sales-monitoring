@@ -42,15 +42,15 @@ export default function FarmsClient({
   return (
     <div className="space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto pb-12">
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-card/50 backdrop-blur-xl p-8 rounded-3xl border border-border/50 shadow-sm overflow-hidden">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 bg-card/50 backdrop-blur-xl p-8 rounded-lg border border-border/50 shadow-sm overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
 
         <div>
-          <h1 className="text-4xl font-black tracking-tight flex items-center gap-3">
-            <Globe className="h-10 w-10 text-primary" />
+          <h1 className="text-2xl font-black tracking-tight flex items-center gap-3">
+            <Globe className="h-7 w-7 sm:h-8 sm:w-8 text-primary" />
             Farm Network
           </h1>
-          <p className="text-muted-foreground mt-2 text-lg">
+          <p className="text-sm sm:text-base text-muted-foreground mt-2">
             Infrastructure Management for{" "}
             <span className="font-bold text-foreground">Otso Poultry Farm</span>
           </p>
@@ -71,7 +71,7 @@ export default function FarmsClient({
 
       {/* TABS SYSTEM */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="overflow-x-auto pb-2 scrollbar-hide">
+        <div className="overflow-x-auto scrollbar-hide">
           <TabsList className="bg-muted/50 p-1.5 rounded-2xl inline-flex">
             <TabsTrigger
               value="all"
@@ -130,7 +130,7 @@ function FarmCard({ farm, buildings }: { farm: any; buildings: any[] }) {
       <div className={cn("p-6 transition-all duration-500", arcticGradient)}>
         <div className="flex justify-between items-start">
           <div className="space-y-1.5 max-w-[70%]">
-            <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors truncate uppercase">
+            <h3 className="text-lg sm:text-xl  font-black tracking-tight text-slate-900 dark:text-white group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors truncate uppercase">
               {farm.name}
             </h3>
             {/* Location Tag */}

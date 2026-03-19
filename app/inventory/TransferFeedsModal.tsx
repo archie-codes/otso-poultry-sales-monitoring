@@ -1,476 +1,635 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
-import { transferFeedStock } from "./actions";
+import { useState, useMemo } from "react";
+import { allocateFeeds } from "./actions";
 import {
-  X,
-  Loader2,
-  Save,
-  ArrowRightLeft,
-  Package,
-  Check,
-  ChevronsUpDown,
-  ChevronDown,
-} from "lucide-react";
-import { toast } from "sonner";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Command,
   CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
-  CommandList,
 } from "@/components/ui/command";
+import {
+  Loader2,
+  ArrowRightLeft,
+  CalendarIcon,
+  ChevronDown,
+  Check,
+  MapPin,
+  Warehouse,
+  PackageSearch,
+  Building2,
+} from "lucide-react";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { FormattedNumberInput } from "@/components/ui/FormattedNumberInput";
+
+// ---> NEW: FRACTION FORMATTER TO CLEAN UP "10.00" SACKS <---
+const formatSacks = (val: number | string | null | undefined) => {
+  const num = Number(val);
+  if (!num || num === 0) return "0";
+
+  const whole = Math.floor(num);
+  const frac = num - whole;
+
+  let fracSymbol = "";
+  if (Math.abs(frac - 0.25) < 0.01) fracSymbol = "¼";
+  else if (Math.abs(frac - 0.5) < 0.01) fracSymbol = "½";
+  else if (Math.abs(frac - 0.75) < 0.01) fracSymbol = "¾";
+  else if (frac > 0) fracSymbol = frac.toFixed(2).substring(1);
+
+  if (whole > 0 && fracSymbol) return `${whole.toLocaleString()} ${fracSymbol}`;
+  if (whole === 0 && fracSymbol) return fracSymbol;
+  return whole.toLocaleString();
+};
 
 export default function TransferFeedsModal({
-  loadsWithStock,
+  availableDeliveries,
   activeLoads,
 }: {
-  loadsWithStock: any[];
+  availableDeliveries: any[];
   activeLoads: any[];
 }) {
-  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  const [sourceLoadId, setSourceLoadId] = useState("");
-  const [targetLoadId, setTargetLoadId] = useState("");
-  const [feedType, setFeedType] = useState("");
-  const [transferDate, setTransferDate] = useState<Date | undefined>(
+  const [allocatedDate, setAllocatedDate] = useState<Date | undefined>(
     new Date(),
   );
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-  const [openSource, setOpenSource] = useState(false);
-  const [openTarget, setOpenTarget] = useState(false);
-  const [openType, setOpenType] = useState(false);
+  // ---> 1. SOURCE STATES (Warehouse) <---
+  const [openWarehouseSupplier, setOpenWarehouseSupplier] = useState(false);
+  const [selectedWarehouseSupplier, setSelectedWarehouseSupplier] =
+    useState("");
 
-  useEffect(() => {
-    setMounted(true);
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsOpen(false);
-    };
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, []);
+  const [openDelivery, setOpenDelivery] = useState(false);
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState<string>("");
 
-  const selectedSource = loadsWithStock.find(
-    (l) => String(l.id) === sourceLoadId,
+  // ---> 2. DESTINATION STATES (Building) <---
+  const [openFarm, setOpenFarm] = useState(false);
+  const [selectedFarm, setSelectedFarm] = useState("");
+
+  const [openLoad, setOpenLoad] = useState(false);
+  const [selectedLoadId, setSelectedLoadId] = useState<string>("");
+
+  const [quantity, setQuantity] = useState<string>("");
+  const cleanQty = Number(quantity.replace(/,/g, "")) || 0;
+
+  // --- WAREHOUSE MATH & FILTERS ---
+  const uniqueWarehouseSuppliers = useMemo(() => {
+    const suppliers = new Set<string>();
+    availableDeliveries.forEach((d) => suppliers.add(d.supplierName));
+    return Array.from(suppliers);
+  }, [availableDeliveries]);
+
+  const filteredDeliveries = useMemo(() => {
+    if (!selectedWarehouseSupplier) return [];
+    return availableDeliveries.filter(
+      (d) => d.supplierName === selectedWarehouseSupplier,
+    );
+  }, [selectedWarehouseSupplier, availableDeliveries]);
+
+  const selectedDelivery = availableDeliveries.find(
+    (d) => String(d.id) === selectedDeliveryId,
   );
-  const selectedTarget = activeLoads.find((l) => String(l.id) === targetLoadId);
 
-  // Available feed types based on what the source actually has
-  const availableFeedTypes = selectedSource
-    ? Object.entries(selectedSource.feedStock)
-        .filter(([_, qty]) => Number(qty) > 0)
-        .map(([type]) => type)
-    : [];
+  const unitPrice = selectedDelivery ? Number(selectedDelivery.unitPrice) : 0;
+  const totalExpensePreview = cleanQty * unitPrice;
 
-  const maxStock =
-    selectedSource && feedType ? Number(selectedSource.feedStock[feedType]) : 0;
+  // FIX: Safely cast to Number for accurate math comparison
+  const isExceeding =
+    selectedDelivery && cleanQty > Number(selectedDelivery.remainingQuantity);
 
-  // ==========================================
-  // SMART FILTER & SORTING LOGIC
-  // ==========================================
-  const sortAndGroupLoads = (loadsArray: any[]) => {
-    // 1. Group by Farm
-    const grouped = loadsArray.reduce((acc: any, load) => {
-      if (!acc[load.farmName]) acc[load.farmName] = [];
-      acc[load.farmName].push(load);
-      return acc;
-    }, {});
+  // --- DESTINATION MATH & FILTERS ---
+  const uniqueFarms = useMemo(() => {
+    const farms = new Set<string>();
+    activeLoads.forEach((load) => farms.add(load.farmName));
+    return Array.from(farms);
+  }, [activeLoads]);
 
-    // 2. Sort Farms Alphabetically
-    const sortedFarms = Object.keys(grouped).sort();
-
-    // 3. Sort Buildings "Naturally" inside each farm (Building 1, Building 2, Building 10)
-    return sortedFarms.map((farmName) => {
-      const sortedBuildings = grouped[farmName].sort((a: any, b: any) =>
-        a.buildingName.localeCompare(b.buildingName, undefined, {
-          numeric: true,
-          sensitivity: "base",
-        }),
-      );
-      return { farmName, buildings: sortedBuildings };
-    });
-  };
-
-  const groupedSource = sortAndGroupLoads(loadsWithStock);
-  const groupedTarget = sortAndGroupLoads(
-    activeLoads.filter((l) => String(l.id) !== sourceLoadId),
-  );
+  const filteredLoads = useMemo(() => {
+    if (!selectedFarm) return [];
+    return activeLoads.filter((load) => load.farmName === selectedFarm);
+  }, [selectedFarm, activeLoads]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!sourceLoadId || !targetLoadId || !feedType || !transferDate) {
-      toast.error("Please fill in all required fields.");
-      return;
-    }
-    const qty = Number(
-      (e.currentTarget.elements.namedItem("quantity") as HTMLInputElement)
-        .value,
-    );
-    if (qty <= 0 || qty > maxStock) {
-      toast.error(
-        `Invalid quantity. You can only transfer up to ${maxStock} sacks.`,
-      );
-      return;
+
+    // Strict Validation
+    if (!selectedWarehouseSupplier)
+      return toast.error("Please select a Warehouse Supplier.");
+    if (!selectedDeliveryId)
+      return toast.error("Please select a specific Feed Batch.");
+    if (!selectedFarm) return toast.error("Please select a Destination Farm.");
+    if (!selectedLoadId)
+      return toast.error("Please select a Destination Building.");
+    if (!allocatedDate) return toast.error("Date of transfer is required.");
+    if (cleanQty <= 0) return toast.error("Quantity must be greater than 0.");
+    if (isExceeding)
+      return toast.error("Quantity exceeds available warehouse stock!");
+
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (allocatedDate.getTime() > today.getTime()) {
+      return toast.error("Invalid Date", {
+        description: "Transfer date cannot be in the future.",
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
     }
 
     setLoading(true);
-    const formData = new FormData();
-    formData.set("sourceLoadId", sourceLoadId);
-    formData.set("targetLoadId", targetLoadId);
-    formData.set("feedType", feedType);
-    formData.set("quantity", String(qty));
-    formData.set("transferDate", format(transferDate, "yyyy-MM-dd"));
-    formData.set(
-      "remarks",
-      (e.currentTarget.elements.namedItem("remarks") as HTMLInputElement).value,
-    );
+    const formData = new FormData(e.currentTarget);
+    formData.set("allocatedDate", format(allocatedDate, "yyyy-MM-dd"));
+    formData.set("quantity", String(cleanQty));
+    formData.set("deliveryId", selectedDeliveryId);
+    formData.set("loadId", selectedLoadId);
 
-    const result = await transferFeedStock(formData);
-    if (result.error) toast.error(result.error);
-    else {
-      toast.success("Feeds Transferred Successfully!");
+    const result = await allocateFeeds(formData);
+
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success("Feeds successfully transferred to building!");
       setIsOpen(false);
-      setSourceLoadId("");
-      setTargetLoadId("");
-      setFeedType("");
-      router.refresh();
+
+      // Reset everything for the next time
+      setQuantity("");
+      setSelectedWarehouseSupplier("");
+      setSelectedDeliveryId("");
+      setSelectedFarm("");
+      setSelectedLoadId("");
     }
     setLoading(false);
   }
 
   return (
-    <>
-      <Button
-        onClick={() => setIsOpen(true)}
-        variant="outline"
-        className="h-11 px-4 rounded-xl font-bold border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-all"
-      >
-        <ArrowRightLeft className="w-4 h-4 mr-2" /> Transfer Feeds
-      </Button>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          className="border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 font-bold rounded-xl shadow-sm h-11 px-6"
+        >
+          <ArrowRightLeft className="w-4 h-4 mr-2" /> Transfer to Building
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-xl rounded-[2rem] p-0 overflow-hidden border-border/50 shadow-2xl">
+        <div className="bg-emerald-600 p-6 text-white">
+          <DialogTitle className="text-2xl font-black flex items-center gap-2">
+            <ArrowRightLeft className="w-6 h-6" /> Allocate Feeds
+          </DialogTitle>
+          <p className="text-emerald-100 text-sm font-medium mt-1">
+            Move feeds securely from the warehouse to an active building.
+          </p>
+        </div>
 
-      {isOpen &&
-        mounted &&
-        createPortal(
-          <div className="fixed inset-0 z-100 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="fixed z-101 w-full max-w-lg border bg-background p-6 shadow-2xl rounded-[2rem] max-h-[90vh] overflow-y-auto custom-scrollbar">
-              <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-xl font-black text-amber-600 flex items-center">
-                  <ArrowRightLeft className="mr-2" /> Move Inventory
-                </h2>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="p-2 rounded-full hover:bg-secondary"
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 bg-card">
+          {/* ======================================= */}
+          {/* SOURCE BLOCK: WAREHOUSE SUPPLIER -> BATCH */}
+          {/* ======================================= */}
+          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50 space-y-4">
+            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+              <PackageSearch className="w-4 h-4 shrink-0" />
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                1. Source: Main Warehouse
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* 1A. SUPPLIER */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Select Supplier *
+                </label>
+                <Popover
+                  open={openWarehouseSupplier}
+                  onOpenChange={setOpenWarehouseSupplier}
                 >
-                  <X className="w-5 h-5" />
-                </button>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openWarehouseSupplier}
+                      className={cn(
+                        "w-full h-11 rounded-xl justify-between border-input bg-white dark:bg-slate-950 font-bold px-3 shadow-sm",
+                        !selectedWarehouseSupplier && "text-muted-foreground",
+                      )}
+                    >
+                      <span className="truncate flex items-center">
+                        <Building2 className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                        {selectedWarehouseSupplier
+                          ? selectedWarehouseSupplier
+                          : "Supplier..."}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Search supplier..."
+                        className="h-10"
+                      />
+                      <CommandEmpty>No stock from this supplier.</CommandEmpty>
+                      <CommandGroup>
+                        {uniqueWarehouseSuppliers.map((supplier) => (
+                          <CommandItem
+                            key={supplier}
+                            value={supplier}
+                            onSelect={() => {
+                              setSelectedWarehouseSupplier(supplier);
+                              setSelectedDeliveryId(""); // Reset feed batch if supplier changes!
+                              setOpenWarehouseSupplier(false);
+                            }}
+                            className="font-bold cursor-pointer"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4 text-emerald-600",
+                                selectedWarehouseSupplier === supplier
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />
+                            {supplier}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* SOURCE POPOVER */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    From (Source)
-                  </label>
-                  <Popover open={openSource} onOpenChange={setOpenSource}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full h-12 justify-between rounded-xl font-bold bg-amber-50/30 px-4"
-                      >
-                        {selectedSource ? (
-                          <div className="flex flex-col items-start gap-0.5 overflow-hidden text-left">
-                            <span className="font-bold text-sm truncate">
-                              {selectedSource.buildingName}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-tight truncate">
-                              {selectedSource.farmName}
-                            </span>
-                          </div>
-                        ) : (
-                          "Select source with stock..."
-                        )}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50 shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200 shadow-xl">
-                      <Command>
-                        <CommandInput placeholder="Search building..." />
-                        <CommandList className="max-h-[300px] custom-scrollbar">
-                          <CommandEmpty>
-                            No buildings with stock found.
-                          </CommandEmpty>
-
-                          {/* Mapped Sorted & Grouped Sources */}
-                          {groupedSource.map((group) => (
-                            <CommandGroup
-                              key={group.farmName}
-                              heading={group.farmName}
-                              className="text-amber-600 font-black tracking-widest"
-                            >
-                              {group.buildings.map((l: any) => (
-                                <CommandItem
-                                  key={`source-${l.id}`}
-                                  value={`${l.farmName} ${l.buildingName} ${l.id}`}
-                                  onSelect={() => {
-                                    setSourceLoadId(String(l.id));
-                                    setFeedType("");
-                                    setOpenSource(false);
-                                  }}
-                                  className="py-3 px-4 cursor-pointer"
-                                >
-                                  <div className="flex flex-col items-start gap-0.5 text-foreground flex-1">
-                                    <span className="font-bold text-sm">
-                                      {l.buildingName}
-                                    </span>
-                                    {!l.isActive && (
-                                      <span className="text-[10px] text-red-500 uppercase tracking-widest bg-red-50 px-1.5 py-0.5 rounded">
-                                        Harvested
-                                      </span>
-                                    )}
-                                  </div>
-                                  <Check
-                                    className={cn(
-                                      "ml-2 h-4 w-4 shrink-0",
-                                      sourceLoadId === String(l.id)
-                                        ? "opacity-100 text-amber-600"
-                                        : "opacity-0",
-                                    )}
-                                  />
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          ))}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* FEED TYPE & QTY */}
-                <div className="grid grid-cols-2 gap-4 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-amber-600">
-                      Feed Type
-                    </label>
-                    <Popover open={openType} onOpenChange={setOpenType}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          disabled={!sourceLoadId}
-                          className="w-full h-12 justify-between rounded-xl font-bold bg-white px-4 disabled:opacity-50"
-                        >
-                          {feedType || "Type..."}{" "}
-                          <ChevronDown className="ml-2 h-4 w-4 opacity-50 shrink-0" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200 shadow-xl">
-                        <Command>
-                          <CommandList>
-                            <CommandEmpty>No feeds available.</CommandEmpty>
-                            <CommandGroup>
-                              {availableFeedTypes.map((type) => {
-                                const stock = selectedSource
-                                  ? Number(
-                                      selectedSource.feedStock?.[type] || 0,
-                                    )
-                                  : 0;
-                                return (
-                                  <CommandItem
-                                    key={`type-${type}`}
-                                    value={type}
-                                    onSelect={() => {
-                                      setFeedType(type);
-                                      setOpenType(false);
-                                    }}
-                                    className="py-3 px-4 cursor-pointer"
-                                  >
-                                    <div className="flex items-center w-full">
-                                      <span className="w-24 font-bold text-foreground">
-                                        {type}
-                                      </span>
-                                      <span
-                                        className={cn(
-                                          "text-xs font-bold",
-                                          stock > 0
-                                            ? "text-emerald-600"
-                                            : "text-red-500",
-                                        )}
-                                      >
-                                        ({stock} left)
-                                      </span>
-                                      <Check
-                                        className={cn(
-                                          "ml-auto h-4 w-4",
-                                          feedType === type
-                                            ? "opacity-100 text-amber-600"
-                                            : "opacity-0",
-                                        )}
-                                      />
-                                    </div>
-                                  </CommandItem>
-                                );
-                              })}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-amber-600">
-                      Qty (Max: {maxStock})
-                    </label>
-                    <Input
-                      type="number"
-                      name="quantity"
-                      min="1"
-                      max={maxStock}
-                      disabled={!feedType}
-                      className="h-12 rounded-xl font-bold px-4 disabled:opacity-50"
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-
-                {/* TARGET POPOVER */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    To (Destination)
-                  </label>
-                  <Popover open={openTarget} onOpenChange={setOpenTarget}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full h-12 justify-between rounded-xl font-bold bg-emerald-50/30 px-4"
-                      >
-                        {selectedTarget ? (
-                          <div className="flex flex-col items-start gap-0.5 overflow-hidden text-left">
-                            <span className="font-bold text-sm truncate">
-                              {selectedTarget.buildingName}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-tight truncate">
-                              {selectedTarget.farmName}
-                            </span>
-                          </div>
-                        ) : (
-                          "Select active building..."
-                        )}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50 shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200 shadow-xl">
-                      <Command>
-                        <CommandInput placeholder="Search building..." />
-                        <CommandList className="max-h-[300px] custom-scrollbar">
-                          <CommandEmpty>
-                            No active buildings found.
-                          </CommandEmpty>
-
-                          {/* Mapped Sorted & Grouped Targets */}
-                          {groupedTarget.map((group) => (
-                            <CommandGroup
-                              key={group.farmName}
-                              heading={group.farmName}
-                              className="text-emerald-600 font-black tracking-widest"
-                            >
-                              {group.buildings.map((l: any) => (
-                                <CommandItem
-                                  key={`target-${l.id}`}
-                                  value={`${l.farmName} ${l.buildingName} ${l.id}`}
-                                  onSelect={() => {
-                                    setTargetLoadId(String(l.id));
-                                    setOpenTarget(false);
-                                  }}
-                                  className="py-3 px-4 cursor-pointer"
-                                >
-                                  <span className="font-bold text-foreground text-sm flex-1">
-                                    {l.buildingName}
-                                  </span>
-                                  <Check
-                                    className={cn(
-                                      "ml-2 h-4 w-4 shrink-0",
-                                      targetLoadId === String(l.id)
-                                        ? "opacity-100 text-emerald-600"
-                                        : "opacity-0",
-                                    )}
-                                  />
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          ))}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* DATE & REMARKS */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                      Date
-                    </label>
-                    <Input
-                      type="date"
-                      name="transferDate"
-                      defaultValue={format(new Date(), "yyyy-MM-dd")}
-                      className="h-12 rounded-xl font-bold px-4 border-input"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                      Remarks
-                    </label>
-                    <Input
-                      type="text"
-                      name="remarks"
-                      placeholder="Optional notes"
-                      className="h-12 rounded-xl px-4 border-input"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-6 border-t">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setIsOpen(false)}
-                    className="h-12 px-6 rounded-xl font-bold"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="h-12 px-8 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-lg"
-                  >
-                    {loading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      "Transfer Sacks"
-                    )}
-                  </Button>
-                </div>
-              </form>
+              {/* 1B. FEED BATCH (DISABLED IF NO SUPPLIER) */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Select Feed Batch *
+                </label>
+                <Popover open={openDelivery} onOpenChange={setOpenDelivery}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openDelivery}
+                      disabled={!selectedWarehouseSupplier}
+                      className={cn(
+                        "w-full h-11 rounded-xl justify-between border-input bg-white dark:bg-slate-950 font-bold px-3 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
+                        !selectedDeliveryId && "text-muted-foreground",
+                      )}
+                    >
+                      <span className="truncate flex items-center">
+                        {/* ---> THE FIX: Apply formatSacks to the selected preview <--- */}
+                        {selectedDeliveryId && selectedDelivery
+                          ? `${formatSacks(selectedDelivery.remainingQuantity)} sacks • ${selectedDelivery.feedType}`
+                          : selectedWarehouseSupplier
+                            ? "Feed Type..."
+                            : "Pick Supplier First"}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Search feed type..."
+                        className="h-10"
+                      />
+                      <CommandEmpty>No feeds found.</CommandEmpty>
+                      <CommandGroup className="max-h-60 overflow-auto custom-scrollbar">
+                        {filteredDeliveries.map((d) => (
+                          <CommandItem
+                            key={d.id}
+                            value={`${d.feedType} ${format(new Date(d.deliveryDate), "MMM d yyyy")}`}
+                            onSelect={() => {
+                              setSelectedDeliveryId(String(d.id));
+                              setOpenDelivery(false);
+                            }}
+                            className="font-bold cursor-pointer border-b border-border/50 last:border-0 py-3"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4 text-emerald-600 shrink-0",
+                                selectedDeliveryId === String(d.id)
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />
+                            <div className="flex flex-col">
+                              <span>
+                                {/* ---> THE FIX: Apply formatSacks to the dropdown list <--- */}
+                                {formatSacks(d.remainingQuantity)} sacks •{" "}
+                                <span className="text-emerald-600">
+                                  {d.feedType}
+                                </span>
+                              </span>
+                              <span className="text-[10px] font-medium text-muted-foreground mt-0.5 truncate">
+                                Arrived:{" "}
+                                {format(
+                                  new Date(d.deliveryDate),
+                                  "MMM d, yyyy",
+                                )}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
-          </div>,
-          document.body,
-        )}
-    </>
+          </div>
+
+          {/* ======================================= */}
+          {/* DESTINATION BLOCK: FARM -> BUILDING       */}
+          {/* ======================================= */}
+          <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/10 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 space-y-4">
+            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-500">
+              <Warehouse className="w-4 h-4 shrink-0" />
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                2. Destination: Building
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* 2A. FARM */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
+                  Select Farm *
+                </label>
+                <Popover open={openFarm} onOpenChange={setOpenFarm}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openFarm}
+                      className={cn(
+                        "w-full h-11 rounded-xl justify-between border-emerald-200 bg-white dark:bg-slate-950 font-bold px-3 shadow-sm",
+                        !selectedFarm && "text-muted-foreground",
+                      )}
+                    >
+                      <span className="truncate flex items-center">
+                        <MapPin className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                        {selectedFarm ? selectedFarm : "Farm..."}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Search farm..."
+                        className="h-10"
+                      />
+                      <CommandEmpty>No farm found.</CommandEmpty>
+                      <CommandGroup>
+                        {uniqueFarms.map((farm) => (
+                          <CommandItem
+                            key={farm}
+                            value={farm}
+                            onSelect={() => {
+                              setSelectedFarm(farm);
+                              setSelectedLoadId(""); // Reset building if farm changes!
+                              setOpenFarm(false);
+                            }}
+                            className="font-bold cursor-pointer"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4 text-emerald-600",
+                                selectedFarm === farm
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />
+                            {farm}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* 2B. BUILDING (DISABLED IF NO FARM) */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">
+                  Select Building *
+                </label>
+                <Popover open={openLoad} onOpenChange={setOpenLoad}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openLoad}
+                      disabled={!selectedFarm}
+                      className={cn(
+                        "w-full h-11 rounded-xl justify-between border-emerald-200 bg-white dark:bg-slate-950 font-bold px-3 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
+                        !selectedLoadId && "text-muted-foreground",
+                      )}
+                    >
+                      <span className="truncate flex items-center">
+                        {selectedLoadId
+                          ? (() => {
+                              const l = filteredLoads.find(
+                                (x) => String(x.id) === selectedLoadId,
+                              );
+                              return l
+                                ? `${l.buildingName} (${l.name})`
+                                : "Building...";
+                            })()
+                          : selectedFarm
+                            ? "Building..."
+                            : "Pick Farm first"}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Search building..."
+                        className="h-10"
+                      />
+                      <CommandEmpty>No building found.</CommandEmpty>
+                      <CommandGroup>
+                        {filteredLoads.map((l) => (
+                          <CommandItem
+                            key={l.id}
+                            value={`${l.buildingName} ${l.name}`}
+                            onSelect={() => {
+                              setSelectedLoadId(String(l.id));
+                              setOpenLoad(false);
+                            }}
+                            className="font-bold cursor-pointer"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4 text-emerald-600",
+                                selectedLoadId === String(l.id)
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />
+                            {l.buildingName}{" "}
+                            <span className="text-[10px] font-medium text-muted-foreground ml-1">
+                              ({l.name})
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Date of Transfer *
+              </label>
+              <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full h-11 rounded-xl justify-between border-input font-normal px-3 bg-secondary/30",
+                      !allocatedDate && "text-muted-foreground",
+                    )}
+                  >
+                    <div className="flex items-center text-sm">
+                      <CalendarIcon className="mr-2 h-4 w-4 opacity-70 shrink-0" />
+                      <span className="truncate">
+                        {allocatedDate
+                          ? format(allocatedDate, "MMM d, yyyy")
+                          : "Pick date"}
+                      </span>
+                    </div>
+                    <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 z-200" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={allocatedDate}
+                    onSelect={(date) => {
+                      setAllocatedDate(date);
+                      setIsCalendarOpen(false);
+                    }}
+                    disabled={(date) => date > new Date()} // <--- Add this line!
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div
+              className="space-y-1.5"
+              onChange={(e) =>
+                setQuantity((e.target as HTMLInputElement).value)
+              }
+            >
+              <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">
+                Quantity (Sacks) *
+              </label>
+              <FormattedNumberInput
+                name="displayQuantity"
+                required
+                allowDecimals={true}
+                placeholder="0"
+                className="h-11 rounded-xl font-black bg-emerald-50 border-emerald-200"
+              />
+            </div>
+          </div>
+
+          {/* FINANCIAL PREVIEW */}
+          {selectedDelivery && cleanQty > 0 && (
+            <div
+              className={cn(
+                "p-4 rounded-xl border flex items-center justify-between transition-colors",
+                isExceeding
+                  ? "bg-red-50 border-red-200"
+                  : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200",
+              )}
+            >
+              <div>
+                <p
+                  className={cn(
+                    "text-[10px] font-black uppercase tracking-widest",
+                    isExceeding ? "text-red-600" : "text-emerald-700",
+                  )}
+                >
+                  {isExceeding
+                    ? "Exceeds Stock!"
+                    : "Financial Expense to Building"}
+                </p>
+                <p
+                  className={cn(
+                    "text-xs font-bold mt-0.5",
+                    isExceeding ? "text-red-500" : "text-emerald-600/80",
+                  )}
+                >
+                  {formatSacks(cleanQty)} sacks × ₱
+                  {unitPrice.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })}
+                </p>
+              </div>
+              <div
+                className={cn(
+                  "text-lg font-black",
+                  isExceeding ? "text-red-600" : "text-emerald-700",
+                )}
+              >
+                ₱
+                {totalExpensePreview.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-border/50">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsOpen(false)}
+              className="rounded-xl font-bold h-11"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={loading || isExceeding}
+              className="rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-8 h-11"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />{" "}
+                  Transferring...
+                </>
+              ) : (
+                "Confirm Transfer"
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -9,28 +9,26 @@ import {
   dailyRecords,
   expenses,
   harvestRecords,
+  feedAllocations,
+  feedDeliveries,
 } from "../../src/db/schema";
 import { eq, desc, asc } from "drizzle-orm";
-import {
-  FileBarChart,
-  MapPin,
-  TrendingUp,
-  TrendingDown,
-  CalendarDays,
-  Wallet,
-} from "lucide-react";
-import Image from "next/image";
+import { FileBarChart, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import KPISection from "./KPISection";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+import ActiveBatchCard from "./ActiveBatchCard";
 
 export default async function ReportsPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
-  // 1. Fetch ONLY ACTIVE Loads for the Executive Ledger
+  // 1. Fetch ONLY ACTIVE Loads for the UI Cards
   const allLoadsData = await db
     .select({
       id: loads.id,
+      name: loads.name,
       farmId: farms.id,
       farmName: farms.name,
       buildingName: buildings.name,
@@ -53,17 +51,69 @@ export default async function ReportsPage() {
   const allExpenses = await db.select().from(expenses);
   const allHarvests = await db.select().from(harvestRecords);
 
+  const allAllocations = await db
+    .select({
+      loadId: feedAllocations.loadId,
+      feedType: feedAllocations.feedType,
+      allocatedDate: feedAllocations.allocatedDate,
+      allocatedQuantity: feedAllocations.allocatedQuantity,
+      unitPrice: feedDeliveries.unitPrice,
+    })
+    .from(feedAllocations)
+    .innerJoin(
+      feedDeliveries,
+      eq(feedAllocations.deliveryId, feedDeliveries.id),
+    );
+
+  // ---> THE FIX: Fetch ALL LOADS (Active & Inactive) to calculate precise overlap dates <---
+  const allLoadsWithFarm = await db
+    .select({
+      id: loads.id,
+      farmId: buildings.farmId,
+      loadDate: loads.loadDate,
+      harvestDate: loads.harvestDate,
+      isActive: loads.isActive,
+    })
+    .from(loads)
+    .innerJoin(buildings, eq(loads.buildingId, buildings.id));
+
+  const allLoadsWithTrueTimeline = allLoadsWithFarm.map((l) => {
+    const loadHarvests = allHarvests.filter((h) => h.loadId === l.id);
+    const trueHarvestDate =
+      loadHarvests.length > 0
+        ? loadHarvests[loadHarvests.length - 1].harvestDate
+        : l.harvestDate;
+
+    const startTime = new Date(l.loadDate).getTime();
+    const endTime = trueHarvestDate
+      ? new Date(trueHarvestDate).getTime()
+      : new Date().getTime();
+
+    return {
+      farmId: l.farmId,
+      isActive: l.isActive,
+      startTime: startTime,
+      endTime: l.isActive ? Infinity : endTime,
+    };
+  });
+
   // 2. THE UPGRADED NUMBER CRUNCHING ENGINE
   const reports = allLoadsData.map((load) => {
-    const actualQuantityLoad = load.quantity;
+    const actualQuantityLoad = Number(load.quantity) || 0;
 
     const loadRecords = allDailyRecords.filter((r) => r.loadId === load.id);
-    const farmMortality = loadRecords.reduce((sum, r) => sum + r.mortality, 0);
+    const farmMortality = loadRecords.reduce(
+      (sum, r) => sum + Number(r.mortality),
+      0,
+    );
 
     const loadHarvests = allHarvests.filter((h) => h.loadId === load.id);
-    const actualHarvest = loadHarvests.reduce((sum, h) => sum + h.quantity, 0);
+    const actualHarvest = loadHarvests.reduce(
+      (sum, h) => sum + Number(h.quantity),
+      0,
+    );
     const totalRtlAmount = loadHarvests.reduce(
-      (sum, h) => sum + h.quantity * Number(h.sellingPrice),
+      (sum, h) => sum + Number(h.quantity) * Number(h.sellingPrice),
       0,
     );
 
@@ -82,38 +132,60 @@ export default async function ReportsPage() {
 
     // --- SMART EXPENSE ENGINE (STRICT MIDNIGHT TIME-GATING) ---
     const start = new Date(load.loadDate);
-    start.setHours(0, 0, 0, 0); // Force strictly to start of day
+    start.setHours(0, 0, 0, 0);
     const loadStartTime = start.getTime();
 
     const end = load.harvestDate ? new Date(load.harvestDate) : new Date();
-    end.setHours(23, 59, 59, 999); // Force strictly to end of day
+    end.setHours(23, 59, 59, 999);
     const loadEndTime = end.getTime();
 
-    // Calculate Direct Building Expenses (Strictly from the database)
-    const directExpensesAmount = allExpenses
-      .filter((e) => e.loadId === load.id)
-      .reduce((sum, e) => sum + Number(e.amount), 0);
+    // Direct Building Expenses
+    const loadDirectExpenses = allExpenses.filter((e) => e.loadId === load.id);
+    const directExpensesAmount = loadDirectExpenses.reduce(
+      (sum, e) => sum + Number(e.amount),
+      0,
+    );
 
-    // Calculate Shared Farm Expenses strictly within timeline
-    const farmActiveLoadsCount =
-      allLoadsData.filter((l) => l.farmId === load.farmId && l.isActive)
-        .length || 1;
+    // Exact Feed Expense Math
+    const loadFeedAllocations = allAllocations.filter(
+      (fa) => fa.loadId === load.id,
+    );
+    const feedExpenses = loadFeedAllocations.reduce(
+      (sum, fa) => sum + Number(fa.allocatedQuantity) * Number(fa.unitPrice),
+      0,
+    );
 
-    const sharedExpensesTotal = allExpenses
+    // ---> THE FIX: Calculate Shared Expenses based on EXACT DATE OVERLAP <---
+    const sharedExpenseShare = allExpenses
       .filter((e) => {
         // Must be a shared expense (no specific building attached)
         if (e.farmId !== load.farmId || e.loadId !== null) return false;
 
-        // Strict Time-gate
+        // Must happen within THIS flock's lifespan
         const expenseTime = new Date(e.expenseDate || e.createdAt).getTime();
         return expenseTime >= loadStartTime && expenseTime <= loadEndTime;
       })
-      .reduce((sum, e) => sum + Number(e.amount), 0);
+      .reduce((sum, e) => {
+        const expenseTime = new Date(e.expenseDate || e.createdAt).getTime();
 
-    const sharedExpenseShare = sharedExpensesTotal / farmActiveLoadsCount;
-    // -----------------------------------------
+        // Dynamic Divisor: How many batches were active on this EXACT day?
+        const activeBatchesOnThisDay = allLoadsWithTrueTimeline.filter(
+          (timeline) => {
+            if (timeline.farmId !== load.farmId) return false;
+            return (
+              expenseTime >= timeline.startTime &&
+              expenseTime <= timeline.endTime
+            );
+          },
+        ).length;
 
-    const totalGrossCost = directExpensesAmount + sharedExpenseShare;
+        const divisor = activeBatchesOnThisDay > 0 ? activeBatchesOnThisDay : 1;
+        return sum + Number(e.amount) / divisor;
+      }, 0);
+    // --------------------------------------------------------------------------
+
+    const totalGrossCost =
+      directExpensesAmount + sharedExpenseShare + feedExpenses;
 
     const actualCostPerChick =
       actualHarvest > 0 ? totalGrossCost / actualHarvest : 0;
@@ -153,6 +225,22 @@ export default async function ReportsPage() {
       totalRtlAmount,
       totalNetSales,
       ageInDays,
+      loadDateStr: new Date(load.loadDate).toLocaleDateString(),
+      pdfPayload: {
+        feeds: loadFeedAllocations.map((fa) => ({
+          date: fa.allocatedDate,
+          type: fa.feedType,
+          qty: Number(fa.allocatedQuantity),
+          cost: Number(fa.allocatedQuantity) * Number(fa.unitPrice),
+        })),
+        expenses: loadDirectExpenses.map((e) => ({
+          date: e.expenseDate,
+          type: e.expenseType,
+          remarks: e.remarks,
+          amount: Number(e.amount),
+        })),
+        sharedExpenseShare,
+      },
     };
   });
 
@@ -170,13 +258,16 @@ export default async function ReportsPage() {
       if (!acc[farm]) acc[farm] = [];
       acc[farm].push(report);
 
-      globalTotals.totalNetSales += report.totalNetSales;
+      if (report.actualHarvest > 0) {
+        globalTotals.totalNetSales += report.totalNetSales;
+      }
+
       globalTotals.totalCapital += Number(report.initialCapital);
       globalTotals.totalMortality += report.farmMortality;
 
       if (report.isActive) {
         const currentLiveBirds =
-          report.quantity - report.farmMortality - report.actualHarvest;
+          Number(report.quantity) - report.farmMortality - report.actualHarvest;
         globalTotals.activeBirds += Math.max(0, currentLiveBirds);
       }
       return acc;
@@ -184,17 +275,14 @@ export default async function ReportsPage() {
     {} as Record<string, typeof reports>,
   );
 
-  const formatMoney = (amount: number) =>
-    `₱${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto pb-16 px-4 sm:px-6 lg:px-8 py-8">
+    <div className="space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto pb-12">
       {/* 1. EXECUTIVE HEADER & GLOBAL KPIs */}
       <div className="flex flex-col xl:flex-row gap-6 mb-8">
-        <div className="w-full xl:w-[35%] shrink-0 bg-card border border-border/50 p-6 lg:p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden flex flex-col justify-center">
+        <div className="w-full shrink-0 bg-card border border-border/50 p-6 lg:p-8 rounded-lg shadow-sm relative overflow-hidden flex flex-col justify-center">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
 
-          <h1 className="text-3xl sm:text-3xl font-black tracking-tight flex items-center gap-3 text-foreground uppercase">
+          <h1 className="text-2xl sm:text-2xl font-black tracking-tight flex items-center gap-3 text-foreground uppercase">
             <FileBarChart className="h-9 w-9 sm:h-10 sm:w-10 text-blue-600 shrink-0" />
             Executive Ledger
           </h1>
@@ -202,10 +290,9 @@ export default async function ReportsPage() {
             Master overview structured by Farm Area and individual Building
             performance.
           </p>
-        </div>
-
-        <div className="flex-1 flex flex-col justify-center">
-          <KPISection globalTotals={globalTotals} reports={reports} />
+          <div className="flex-1 flex flex-col justify-center pt-5">
+            <KPISection globalTotals={globalTotals} reports={reports} />
+          </div>
         </div>
       </div>
 
@@ -220,232 +307,56 @@ export default async function ReportsPage() {
         </div>
       ) : (
         <div className="space-y-16">
-          {Object.entries(groupedData).map(([farmName, loadsInFarm]) => (
-            <div key={farmName} className="space-y-8">
-              <div className="flex items-center gap-3 pb-4 border-b-[3px] border-blue-600/30">
-                <MapPin className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600" />
-                <h2 className="text-2xl sm:text-3xl md:text-3xl font-black tracking-tighter uppercase text-foreground">
-                  {farmName}
-                </h2>
-              </div>
+          {Object.entries(groupedData).map(([farmName, loadsInFarm]) => {
+            const defaultTab = loadsInFarm[0]?.id.toString();
 
-              <div className="pl-0 sm:pl-4 space-y-8 sm:border-l-2 sm:border-slate-200 dark:sm:border-slate-800">
-                <div className="grid grid-cols-1 gap-8">
-                  {loadsInFarm.map((report) => (
-                    <div
-                      key={report.id}
-                      className="bg-card border border-border/60 rounded-[2.5rem] overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-md"
-                    >
-                      <div className="px-5 py-4 sm:px-6 sm:py-5 border-b border-border/50 bg-slate-50/80 dark:bg-slate-900/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                            <h4 className="text-lg sm:text-xl font-black uppercase tracking-tight text-foreground">
-                              {report.buildingName}
-                            </h4>
-                            <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest flex items-center gap-1.5">
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                              </span>
-                              Active
-                            </span>
-                            <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest">
-                              Day {report.ageInDays}
-                            </span>
-                          </div>
+            return (
+              <div key={farmName} className="space-y-6">
+                {/* FARM HEADER */}
+                <div className="flex items-center gap-3 pb-2 border-b-[3px] border-blue-600/30">
+                  <MapPin className="h-6 w-6 sm:h-7 sm:w-7 text-blue-600" />
+                  <h2 className="text-xl sm:text-2xl font-black tracking-tighter uppercase text-foreground">
+                    {farmName}
+                  </h2>
+                </div>
 
-                          <div className="flex items-center gap-1.5">
-                            <Image
-                              src="/hen.svg"
-                              alt="Hen"
-                              width={16}
-                              height={16}
-                              className="object-contain dark:invert opacity-80"
-                            />
-                            <p className="text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-500 uppercase tracking-widest">
-                              {report.chickType || "Standard Breed"}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl w-fit">
-                          <CalendarDays className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                          Loaded:{" "}
-                          {new Date(report.loadDate).toLocaleDateString()}
-                        </div>
-                      </div>
-
-                      {/* CARD BODY: METRICS GRID */}
-                      <div className="p-5 sm:p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
-                        <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            Target Harvest
-                          </p>
-                          <p className="text-xs sm:text-sm font-bold text-foreground">
-                            {report.harvestDate
-                              ? new Date(
-                                  report.harvestDate,
-                                ).toLocaleDateString()
-                              : "TBD"}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            Customer Name
-                          </p>
-                          <p
-                            className="text-xs sm:text-sm font-bold text-foreground truncate"
-                            title={report.displayCustomer}
+                {/* BUILDING TABS */}
+                <div className="w-full max-w-full overflow-hidden">
+                  <Tabs defaultValue={defaultTab} className="w-full">
+                    <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+                      <TabsList className="flex h-auto w-max items-center justify-start gap-2 sm:gap-3 bg-transparent p-0 border-none">
+                        {loadsInFarm.map((report) => (
+                          <TabsTrigger
+                            key={`trigger-${report.id}`}
+                            value={report.id.toString()}
+                            className={cn(
+                              "shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold uppercase tracking-wider transition-all",
+                              "bg-secondary/50 border border-transparent hover:border-border/50 hover:bg-secondary",
+                              "data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600",
+                              "data-[state=active]:shadow-md data-[state=active]:scale-[1.02]",
+                            )}
                           >
-                            {report.displayCustomer}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            Percent Harvest
-                          </p>
-                          <p className="text-xs sm:text-sm font-bold text-primary">
-                            {report.percentHarvest.toFixed(1)}%
-                          </p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            Actual Qty Load
-                          </p>
-                          <p className="text-xs sm:text-sm font-bold text-foreground">
-                            {report.quantity.toLocaleString()}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-red-500">
-                            Mortality
-                          </p>
-                          <p className="text-xs sm:text-sm font-black text-red-600 dark:text-red-400">
-                            {report.farmMortality.toLocaleString()}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-emerald-600">
-                            Actual Harvest
-                          </p>
-                          <p className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-500">
-                            {report.actualHarvest.toLocaleString()}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            Actual Cost/Chick
-                          </p>
-                          <p className="text-xs sm:text-sm font-bold text-foreground">
-                            {formatMoney(report.actualCostPerChick)}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-500">
-                            Selling Price
-                          </p>
-                          <p className="text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400">
-                            {formatMoney(Number(report.sellingPrice))}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500">
-                            Total Gross (Expenses)
-                          </p>
-                          <p className="text-xs sm:text-sm font-bold text-amber-600 dark:text-amber-500">
-                            {formatMoney(report.totalGrossCost)}
-                          </p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            Total RTL Amount
-                          </p>
-                          <p className="text-xs sm:text-sm font-black text-foreground">
-                            {formatMoney(report.totalRtlAmount)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="px-5 py-5 sm:px-6 sm:py-6 bg-slate-100 dark:bg-slate-900 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/50 rounded-b-[2.5rem]">
-                        <div className="flex items-center justify-between bg-white dark:bg-slate-950 p-3 sm:p-4 rounded-[1.5rem] border border-border/50 shadow-sm">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 sm:p-2.5 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-xl">
-                              <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
-                            </div>
-                            <div>
-                              <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                                Initial Capital
-                              </p>
-                              <p className="text-lg sm:text-xl font-black text-foreground">
-                                {formatMoney(Number(report.initialCapital))}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div
-                          className={cn(
-                            "flex items-center justify-between p-3 sm:p-4 rounded-[1.5rem] shadow-sm border",
-                            report.totalNetSales >= 0
-                              ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900/50"
-                              : "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900/50",
-                          )}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={cn(
-                                "p-2 sm:p-2.5 rounded-xl",
-                                report.totalNetSales >= 0
-                                  ? "bg-emerald-200/50 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400"
-                                  : "bg-red-200/50 text-red-700 dark:bg-red-900/50 dark:text-red-400",
-                              )}
-                            >
-                              {report.totalNetSales >= 0 ? (
-                                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
-                              ) : (
-                                <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5" />
-                              )}
-                            </div>
-                            <div>
-                              <p
-                                className={cn(
-                                  "text-[9px] sm:text-[10px] font-bold uppercase tracking-widest",
-                                  report.totalNetSales >= 0
-                                    ? "text-emerald-700 dark:text-emerald-500"
-                                    : "text-red-700 dark:text-red-500",
-                                )}
-                              >
-                                Total Net Sales
-                              </p>
-                              <p
-                                className={cn(
-                                  "text-lg sm:text-xl md:text-2xl font-black",
-                                  report.totalNetSales >= 0
-                                    ? "text-emerald-700 dark:text-emerald-400"
-                                    : "text-red-700 dark:text-red-400",
-                                )}
-                              >
-                                {formatMoney(report.totalNetSales)}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                            {report.buildingName || "Unnamed"}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
                     </div>
-                  ))}
+
+                    {/* TABS CONTENT: Render the Client Component */}
+                    {loadsInFarm.map((report) => (
+                      <TabsContent
+                        key={`content-${report.id}`}
+                        value={report.id.toString()}
+                        className="mt-0 focus-visible:outline-none focus-visible:ring-0"
+                      >
+                        <ActiveBatchCard report={report} />
+                      </TabsContent>
+                    ))}
+                  </Tabs>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

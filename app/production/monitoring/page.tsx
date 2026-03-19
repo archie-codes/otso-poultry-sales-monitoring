@@ -8,13 +8,12 @@ import {
   buildings,
   farms,
   users,
-  feedTransactions,
+  feedAllocations,
+  feedDeliveries, // <--- Added this to get the price safely!
 } from "../../../src/db/schema";
-// Added 'sql' to drizzle-orm imports
 import { desc, eq, and, sql } from "drizzle-orm";
 import MonitoringTableClient from "./MonitoringTableClient";
-import LogMortalityModal from "./LogMortalityModal";
-import LogFeedsModal from "./LogFeedsModal";
+import LogDailyRecordModal from "./LogDailyRecordModal";
 
 export default async function DailyMonitoringPage(props: {
   searchParams: Promise<{
@@ -37,9 +36,7 @@ export default async function DailyMonitoringPage(props: {
   const ITEMS_PER_PAGE = 10;
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
-  // ==============================================================================
-  // 1. FETCH ALL LOADS & CALCULATE LIVE FEED STOCK
-  // ==============================================================================
+  // 1. FETCH ALL LOADS
   const allLoadsRaw = await db
     .select({
       id: loads.id,
@@ -52,34 +49,44 @@ export default async function DailyMonitoringPage(props: {
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
     .innerJoin(farms, eq(buildings.farmId, farms.id));
 
-  const allFeedTrans = await db.select().from(feedTransactions);
+  // ---> NEW: Fetch building inventory AND JOIN with deliveries to get the exact price!
+  const allBuildingFeeds = await db
+    .select({
+      loadId: feedAllocations.loadId,
+      feedType: feedAllocations.feedType,
+      remainingInBuilding: feedAllocations.remainingInBuilding,
+      unitPrice: feedDeliveries.unitPrice, // Grab the price!
+    })
+    .from(feedAllocations)
+    .leftJoin(
+      feedDeliveries,
+      eq(feedAllocations.deliveryId, feedDeliveries.id),
+    );
 
   const mappedLoads = allLoadsRaw.map((load) => {
-    const feedStock = allFeedTrans
-      .filter((ft) => ft.loadId === load.id)
+    const feedStock = allBuildingFeeds
+      .filter((fa) => fa.loadId === load.id)
       .reduce(
-        (acc, ft) => {
-          const type = ft.feedType;
+        (acc, fa) => {
+          const type = fa.feedType;
           if (type) {
-            acc[type] = (acc[type] || 0) + Number(ft.quantity);
+            if (!acc[type]) {
+              // Now we pass BOTH qty and price to the Modal!
+              acc[type] = { qty: 0, price: Number(fa.unitPrice) || 0 };
+            }
+            acc[type].qty += Number(fa.remainingInBuilding);
           }
           return acc;
         },
-        {} as Record<string, number>,
+        {} as Record<string, { qty: number; price: number }>,
       );
 
     return { ...load, feedStock };
   });
 
-  const loadsWithStock = mappedLoads.filter((load) =>
-    Object.values(load.feedStock).some((qty) => qty > 0),
-  );
-
   const activeLoads = mappedLoads.filter((load) => load.isActive);
 
-  // ==============================================================================
-  // 2. SETUP CASCADING FILTERS INFRASTRUCTURE
-  // ==============================================================================
+  // 2. FILTERS
   const infrastructure = await db
     .select({ farmName: farms.name, buildingName: buildings.name })
     .from(buildings)
@@ -88,7 +95,8 @@ export default async function DailyMonitoringPage(props: {
   const uniqueFarmNames = Array.from(
     new Set(infrastructure.map((i) => i.farmName)),
   );
-  const availableBuildingsForFilter =
+
+  const filteredBuildings =
     selectedFarm && selectedFarm !== "all"
       ? Array.from(
           new Set(
@@ -99,9 +107,6 @@ export default async function DailyMonitoringPage(props: {
         )
       : [];
 
-  // ==============================================================================
-  // 3. BUILD DYNAMIC SQL FILTERS
-  // ==============================================================================
   const filterConditions = [];
   if (selectedFarm && selectedFarm !== "all")
     filterConditions.push(eq(farms.name, selectedFarm));
@@ -113,9 +118,6 @@ export default async function DailyMonitoringPage(props: {
   const finalCondition =
     filterConditions.length > 0 ? and(...filterConditions) : undefined;
 
-  // ==============================================================================
-  // 4. PAGINATION MATH
-  // ==============================================================================
   const countQuery = await db
     .select({ count: sql<number>`count(*)` })
     .from(dailyRecords)
@@ -127,17 +129,22 @@ export default async function DailyMonitoringPage(props: {
   const totalItems = Number(countQuery[0].count);
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
-  // ==============================================================================
-  // 5. FETCH HISTORY (FIXED THE SQL FAN-OUT BUG)
-  // ==============================================================================
+  // 3. FETCH HISTORY
   const history = await db
     .select({
       id: dailyRecords.id,
       loadId: dailyRecords.loadId,
       date: dailyRecords.recordDate,
+      mortalityAm: dailyRecords.mortalityAm,
+      mortalityPm: dailyRecords.mortalityPm,
       mortality: dailyRecords.mortality,
+
+      // THESE NAMES MUST MATCH THE TABLE CLIENT
+      feedsAm: dailyRecords.feedsConsumedAm,
+      feedsPm: dailyRecords.feedsConsumedPm,
       feeds: dailyRecords.feedsConsumed,
-      feedType: feedTransactions.feedType,
+
+      feedType: dailyRecords.feedType,
       remarks: dailyRecords.remarks,
       staffName: users.name,
       buildingName: buildings.name,
@@ -148,42 +155,33 @@ export default async function DailyMonitoringPage(props: {
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
     .innerJoin(farms, eq(buildings.farmId, farms.id))
     .leftJoin(users, eq(dailyRecords.recordedBy, users.id))
-    // THE FIX: Strictly link the Daily Record ID to the secret remark in Feed Transactions!
-    .leftJoin(
-      feedTransactions,
-      eq(
-        feedTransactions.remarks,
-        sql`CONCAT('DAILY_LOG_', ${dailyRecords.id})`,
-      ),
-    )
     .where(finalCondition)
     .orderBy(desc(dailyRecords.recordDate), desc(dailyRecords.id))
     .limit(ITEMS_PER_PAGE)
     .offset(offset);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto px-4 py-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-card border border-border/50 p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden">
+    <div className="space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto pb-12">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-card border border-border/50 p-8 rounded-lg shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground uppercase">
+          <h1 className="text-2xl font-black tracking-tight text-foreground uppercase">
             Daily Monitoring
           </h1>
-          <p className="text-muted-foreground font-medium mt-1">
+          <p className="text-muted-foreground font-sm mt-1">
             Log mortality and feed consumption for active buildings.
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
-          <LogMortalityModal activeLoads={activeLoads} />
-          <LogFeedsModal activeLoads={activeLoads} />
+          <LogDailyRecordModal activeLoads={activeLoads} />
         </div>
       </div>
 
       <MonitoringTableClient
         history={history}
         farms={uniqueFarmNames}
-        buildings={availableBuildingsForFilter}
+        buildings={filteredBuildings}
         totalPages={totalPages}
         currentPage={currentPage}
         userRole={userRole}

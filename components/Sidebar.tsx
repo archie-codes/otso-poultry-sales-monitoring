@@ -13,7 +13,9 @@ import {
   Users,
   ShieldAlert,
   ChevronDown,
-  Package, // <-- NEW: Added Package icon for Inventory
+  Package,
+  Warehouse, // <-- NEW
+  Building2, // <-- NEW
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -37,13 +39,11 @@ const HenIcon = ({ className }: { className?: string }) => {
   );
 };
 
-// --- NEW: TypeScript Definitions ---
 type NavItem = {
   name: string;
-  href?: string; // Optional (not needed if it has subItems)
+  href?: string;
   icon: any;
   subItems?: {
-    // Optional (only for dropdowns)
     name: string;
     href: string;
     icon: any;
@@ -54,9 +54,8 @@ type NavGroup = {
   label: string;
   items: NavItem[];
 };
-// ----------------------------------
 
-// Apply the NavGroup type to our arrays
+// ---> UPGRADED NAVIGATION GROUPS <---
 const ownerGroups: NavGroup[] = [
   {
     label: "Operations",
@@ -69,8 +68,18 @@ const ownerGroups: NavGroup[] = [
         href: "/production/monitoring",
         icon: Activity,
       },
-      // --- NEW ROUTE ---
-      { name: "Feed Inventory", href: "/inventory", icon: Package },
+      {
+        name: "Feed Inventory",
+        icon: Package,
+        subItems: [
+          { name: "Main Warehouse", href: "/inventory", icon: Warehouse },
+          {
+            name: "Building Stocks",
+            href: "/inventory/building-stocks",
+            icon: Building2,
+          },
+        ],
+      },
     ],
   },
   {
@@ -106,8 +115,18 @@ const staffGroups: NavGroup[] = [
         icon: Activity,
       },
       { name: "Expenses", href: "/expenses", icon: TrendingDown },
-      // --- NEW ROUTE ---
-      { name: "Feed Inventory", href: "/inventory", icon: Package },
+      {
+        name: "Feed Inventory",
+        icon: Package,
+        subItems: [
+          { name: "Main Warehouse", href: "/inventory", icon: Warehouse },
+          {
+            name: "Building Stocks",
+            href: "/inventory/building-stocks",
+            icon: Building2,
+          },
+        ],
+      },
     ],
   },
 ];
@@ -116,9 +135,15 @@ export default function Sidebar({ role }: { role: string }) {
   const pathname = usePathname();
   const navGroups = role === "owner" ? ownerGroups : staffGroups;
 
-  const [isSettingsOpen, setIsSettingsOpen] = useState(
-    pathname.startsWith("/settings"),
-  );
+  // ---> UPGRADED DYNAMIC MENU STATE <---
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
+    Settings: pathname.startsWith("/settings"),
+    "Feed Inventory": pathname.startsWith("/inventory"),
+  });
+
+  const toggleMenu = (name: string) => {
+    setOpenMenus((prev) => ({ ...prev, [name]: !prev[name] }));
+  };
 
   return (
     <div className="w-[260px] border-r border-border/40 bg-card hidden md:flex flex-col h-full shadow-sm z-20 transition-all duration-300">
@@ -133,7 +158,6 @@ export default function Sidebar({ role }: { role: string }) {
             priority
           />
         </div>
-
         <span className="font-bold text-lg tracking-tight bg-linear-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
           Otso Poultry
         </span>
@@ -150,12 +174,17 @@ export default function Sidebar({ role }: { role: string }) {
             {group.items.map((item) => {
               // IF THIS ITEM HAS SUB-ITEMS
               if (item.subItems) {
-                const isAnySubActive = pathname.startsWith("/settings");
+                const isOpen = openMenus[item.name];
+                const isAnySubActive = item.subItems.some(
+                  (sub) =>
+                    pathname === sub.href ||
+                    pathname.startsWith(sub.href + "/"),
+                );
 
                 return (
                   <div key={item.name} className="flex flex-col gap-1 mt-1">
                     <button
-                      onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                      onClick={() => toggleMenu(item.name)}
                       className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group w-full ${
                         isAnySubActive
                           ? "text-slate-900 font-bold dark:text-white"
@@ -167,13 +196,11 @@ export default function Sidebar({ role }: { role: string }) {
                         <span className="text-sm">{item.name}</span>
                       </div>
                       <ChevronDown
-                        className={`h-4 w-4 transition-transform duration-200 ${
-                          isSettingsOpen ? "rotate-180" : ""
-                        }`}
+                        className={`h-4 w-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
                       />
                     </button>
 
-                    {isSettingsOpen && (
+                    {isOpen && (
                       <div className="flex flex-col gap-1 pl-4 mt-1 border-l-2 border-border/50 ml-5 animate-in slide-in-from-top-2 fade-in duration-200">
                         {item.subItems.map((subItem) => {
                           const isStrictActive = pathname === subItem.href;
@@ -188,11 +215,7 @@ export default function Sidebar({ role }: { role: string }) {
                               }`}
                             >
                               <subItem.icon
-                                className={`h-4 w-4 ${
-                                  isStrictActive
-                                    ? "text-slate-900 dark:text-white"
-                                    : ""
-                                }`}
+                                className={`h-4 w-4 ${isStrictActive ? "text-slate-900 dark:text-white" : ""}`}
                               />
                               <span className="text-[13px]">
                                 {subItem.name}
@@ -207,7 +230,6 @@ export default function Sidebar({ role }: { role: string }) {
               }
 
               // NORMAL ITEMS
-              // TypeScript now knows href is potentially undefined, so we use a fallback to safely check it
               const itemHref = item.href || "";
               const isActive =
                 pathname === itemHref ||

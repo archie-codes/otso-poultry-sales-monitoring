@@ -7,7 +7,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,12 +23,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -65,12 +58,15 @@ const chickBreeds = [
 
 export default function EditLoadModal({
   load,
+  isOpen,
+  onClose,
   onSuccess,
 }: {
   load: any;
+  isOpen: boolean;
+  onClose: () => void;
   onSuccess?: () => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // COMBBOX STATE
@@ -81,9 +77,12 @@ export default function EditLoadModal({
   const [loadDate, setLoadDate] = useState<Date | undefined>(
     load.loadDate ? new Date(load.loadDate) : undefined,
   );
+  const [openLoadDate, setOpenLoadDate] = useState(false);
+
   const [harvestDate, setHarvestDate] = useState<Date | undefined>(
     load.harvestDate ? new Date(load.harvestDate) : undefined,
   );
+  const [openHarvestDate, setOpenHarvestDate] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -95,7 +94,7 @@ export default function EditLoadModal({
       return;
     }
 
-    // ---> NEW: EDIT DATE SAFETY LOCKS <---
+    // ---> EDIT DATE SAFETY LOCKS <---
     const today = new Date();
     today.setHours(23, 59, 59, 999); // Allow any time today
 
@@ -134,7 +133,7 @@ export default function EditLoadModal({
     if (rawCapital)
       formData.set("initialCapital", rawCapital.replace(/,/g, ""));
 
-    // Format dates cleanly using date-fns to avoid timezone shifts
+    // Format dates cleanly using date-fns
     formData.set("loadDate", format(loadDate, "yyyy-MM-dd"));
     if (harvestDate) {
       formData.set("harvestDate", format(harvestDate, "yyyy-MM-dd"));
@@ -152,33 +151,15 @@ export default function EditLoadModal({
         description: "Load details successfully updated.",
         style: { backgroundColor: "blue", color: "white", border: "none" },
       });
-      setIsOpen(false);
+      onClose(); // <-- Use onClose instead of setIsOpen
       if (onSuccess) onSuccess();
     }
     setLoading(false);
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <TooltipProvider delayDuration={200}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DialogTrigger asChild>
-              <button className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors">
-                <Edit2 className="w-4 h-4" />
-              </button>
-            </DialogTrigger>
-          </TooltipTrigger>
-          <TooltipContent
-            side="top"
-            className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-semibold text-xs rounded-lg"
-          >
-            <p>Edit load details</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
-      <DialogContent className="sm:max-w-[600px] p-6 sm:p-8 rounded-3xl overflow-visible border-border/50 shadow-2xl">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-[700px] p-6 sm:p-8 rounded-3xl overflow-visible border-border/50 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-2xl font-black tracking-tight text-blue-600 dark:text-blue-400">
             Edit Load Details
@@ -193,7 +174,7 @@ export default function EditLoadModal({
               <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 Load Date *
               </label>
-              <Popover>
+              <Popover open={openLoadDate} onOpenChange={setOpenLoadDate}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -213,7 +194,10 @@ export default function EditLoadModal({
                   <Calendar
                     mode="single"
                     selected={loadDate}
-                    onSelect={setLoadDate}
+                    onSelect={(date) => {
+                      setLoadDate(date);
+                      setOpenLoadDate(false); // Auto-close
+                    }}
                     initialFocus
                   />
                 </PopoverContent>
@@ -227,7 +211,7 @@ export default function EditLoadModal({
                   (4 Months Estimated)
                 </span>
               </label>
-              <Popover>
+              <Popover open={openHarvestDate} onOpenChange={setOpenHarvestDate}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -249,7 +233,10 @@ export default function EditLoadModal({
                   <Calendar
                     mode="single"
                     selected={harvestDate}
-                    onSelect={setHarvestDate}
+                    onSelect={(date) => {
+                      setHarvestDate(date);
+                      setOpenHarvestDate(false); // Auto-close
+                    }}
                     initialFocus
                   />
                 </PopoverContent>
@@ -257,8 +244,21 @@ export default function EditLoadModal({
             </div>
           </div>
 
-          {/* 2. BREED AND CUSTOMER GRID */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {/* 2. BATCH / BREED / CUSTOMER GRID (3 Columns) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="space-y-2.5">
+              <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Batch Name
+              </label>
+              <Input
+                name="name"
+                type="text"
+                defaultValue={load.name || ""}
+                placeholder="e.g. Loading 1"
+                className="rounded-xl h-12 font-bold"
+              />
+            </div>
+
             <div className="space-y-2.5">
               <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 Chick Type
@@ -295,7 +295,7 @@ export default function EditLoadModal({
                                   (b) => b.toLowerCase() === v.toLowerCase(),
                                 ) || v;
                               setChickType(selectedBreed);
-                              setOpenChickType(false);
+                              setOpenChickType(false); // Auto-close
                             }}
                             className="py-2.5"
                           >
@@ -331,7 +331,7 @@ export default function EditLoadModal({
             </div>
           </div>
 
-          {/* 3. NUMBER GRID (Using FormattedNumberInput) */}
+          {/* 3. NUMBER GRID */}
           <div className="grid md:grid-cols-3 gap-4 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-600 dark:text-blue-400">
@@ -378,7 +378,7 @@ export default function EditLoadModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIsOpen(false)}
+              onClick={onClose} // <-- Use onClose here too
               className="rounded-xl h-11 px-6 font-bold"
             >
               Cancel

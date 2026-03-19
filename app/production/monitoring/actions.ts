@@ -4,13 +4,11 @@ import { db } from "../../../src";
 import {
   dailyRecords,
   users,
-  feedTransactions,
-  expenses,
+  feedAllocations, // <--- TIER 2 SUB-INVENTORY
   loads,
   buildings,
 } from "../../../src/db/schema";
-// Added 'inArray' for the Transfer Fix
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../lib/auth";
@@ -38,104 +36,79 @@ export async function addDailyRecord(formData: FormData) {
 
   const loadId = Number(formData.get("loadId"));
   const recordDate = formData.get("recordDate") as string;
-  const mortality = Number(formData.get("mortality")) || 0;
-  const feedsConsumed = formData.get("feedsConsumed") as string;
+
+  const mortalityAm = Number(formData.get("mortalityAm")) || 0;
+  const mortalityPm = Number(formData.get("mortalityPm")) || 0;
+  const mortality = mortalityAm + mortalityPm;
+
+  const feedsConsumedAm = Number(formData.get("feedsConsumedAm")) || 0;
+  const feedsConsumedPm = Number(formData.get("feedsConsumedPm")) || 0;
+  const totalFeedsConsumed = feedsConsumedAm + feedsConsumedPm;
+  const feedsConsumedString = String(totalFeedsConsumed);
+
   const feedType = formData.get("feedType") as string;
   const remarks = formData.get("remarks") as string;
 
   if (!loadId || !recordDate) return { error: "Missing required fields." };
 
   try {
-    // 1. SMART PRICE LOOKUP: Find the exact cost per bag from Delivery OR Transfer
-    let lastDelivery = await db
-      .select({
-        costPerBag: feedTransactions.costPerBag,
-        farmId: buildings.farmId,
-      })
-      .from(feedTransactions)
-      .innerJoin(loads, eq(feedTransactions.loadId, loads.id))
-      .innerJoin(buildings, eq(loads.buildingId, buildings.id))
-      .where(
-        and(
-          eq(feedTransactions.loadId, loadId),
-          eq(feedTransactions.feedType, feedType), // Try exact feed type first
-          inArray(feedTransactions.transactionType, [
-            "DELIVERY_IN",
-            "TRANSFER_IN",
-          ]), // <--- THE FIX
-        ),
-      )
-      .orderBy(desc(feedTransactions.createdAt))
-      .limit(1);
-
-    // If exact match fails (e.g. they delivered 'BOOSTER' but logged 'STARTER'),
-    // grab the latest delivery for that building regardless of type.
-    if (lastDelivery.length === 0) {
-      lastDelivery = await db
-        .select({
-          costPerBag: feedTransactions.costPerBag,
-          farmId: buildings.farmId,
-        })
-        .from(feedTransactions)
-        .innerJoin(loads, eq(feedTransactions.loadId, loads.id))
-        .innerJoin(buildings, eq(loads.buildingId, buildings.id))
-        .where(
-          and(
-            eq(feedTransactions.loadId, loadId),
-            inArray(feedTransactions.transactionType, [
-              "DELIVERY_IN",
-              "TRANSFER_IN",
-            ]), // <--- THE FIX
-          ),
-        )
-        .orderBy(desc(feedTransactions.createdAt))
-        .limit(1);
-    }
-
-    const costPerBag = Number(lastDelivery[0]?.costPerBag || 0); // E.g., 1100
-    const farmId = lastDelivery[0]?.farmId;
-
-    // 2. Insert Daily Record
+    // 1. Insert Daily Record
     const [newRecord] = await db
       .insert(dailyRecords)
       .values({
         loadId,
         recordDate,
+        mortalityAm,
+        mortalityPm,
         mortality,
-        feedsConsumed,
+        feedType: feedType || null,
+        feedsConsumedAm: String(feedsConsumedAm),
+        feedsConsumedPm: String(feedsConsumedPm),
+        feedsConsumed: feedsConsumedString,
         remarks: remarks || null,
         recordedBy: userId,
       })
       .returning({ id: dailyRecords.id });
 
-    // 3. Log Inventory & Accurate Expense
-    const qtyNum = Number(feedsConsumed); // E.g., 2 bags
-    if (qtyNum > 0 && feedType) {
-      // Reduce Physical Sacks
-      await db.insert(feedTransactions).values({
-        loadId,
-        feedType,
-        transactionType: "DAILY_CONSUMPTION",
-        quantity: -qtyNum,
-        costPerBag: String(costPerBag),
-        transactionDate: recordDate,
-        recordedBy: userId,
-        remarks: `DAILY_LOG_${newRecord.id}`,
-      });
+    // 2. DEDUCT INVENTORY (FIFO Logic)
+    if (totalFeedsConsumed > 0 && feedType) {
+      let toDeduct = totalFeedsConsumed;
 
-      // Log the Financial Expense (2 bags * 1100 = 2200)
-      if (farmId && costPerBag > 0) {
-        await db.insert(expenses).values({
-          farmId,
-          loadId, // <--- Locks this expense strictly to this flock!
-          amount: String(qtyNum * costPerBag),
-          expenseType: "feeds",
-          expenseDate: recordDate,
-          recordedBy: userId,
-        });
+      // Get all allocations for this feed type in this building, oldest first
+      const allocations = await db
+        .select()
+        .from(feedAllocations)
+        .where(
+          and(
+            eq(feedAllocations.loadId, loadId),
+            eq(feedAllocations.feedType, feedType),
+          ),
+        )
+        .orderBy(asc(feedAllocations.allocatedDate), asc(feedAllocations.id));
+
+      for (const alloc of allocations) {
+        if (toDeduct <= 0) break;
+
+        // Safely convert the database decimal string to a JavaScript Number
+        const currentRemaining = Number(alloc.remainingInBuilding);
+
+        // Use our safe 'currentRemaining' number for all the math below!
+        if (currentRemaining > 0) {
+          const deductAmount = Math.min(currentRemaining, toDeduct);
+
+          await db
+            .update(feedAllocations)
+            .set({
+              remainingInBuilding: String(currentRemaining - deductAmount),
+            })
+            .where(eq(feedAllocations.id, alloc.id));
+
+          toDeduct -= deductAmount;
+        }
       }
-    }
+    } // <--- FIX: This closing bracket was missing!
 
+    // Now this fires safely even if feeds are 0
     revalidatePath("/production/monitoring");
     return { success: true, newId: newRecord.id };
   } catch (error) {
@@ -152,34 +125,44 @@ export async function deleteDailyRecord(id: number) {
   if (!userId) return { error: "Unauthorized." };
 
   try {
-    // 1. Get the record details first to find the date/load
     const record = await db
       .select()
       .from(dailyRecords)
       .where(eq(dailyRecords.id, id))
       .limit(1);
+
     if (record.length === 0) return { error: "Record not found" };
 
-    const { loadId, recordDate } = record[0];
+    const { loadId, feedsConsumed, feedType } = record[0];
+    const consumed = Number(feedsConsumed);
 
-    // 2. Clean up physical inventory
-    await db
-      .delete(feedTransactions)
-      .where(eq(feedTransactions.remarks, `DAILY_LOG_${id}`));
+    // 1. Refund the eaten feeds back to the building's inventory
+    if (consumed > 0 && feedType) {
+      const latestAlloc = await db
+        .select()
+        .from(feedAllocations)
+        .where(
+          and(
+            eq(feedAllocations.loadId, loadId),
+            eq(feedAllocations.feedType, feedType),
+          ),
+        )
+        .orderBy(desc(feedAllocations.allocatedDate), desc(feedAllocations.id))
+        .limit(1);
 
-    // 3. Clean up financial expense
-    // Since we don't have a description, we filter by load, date, and type
-    await db
-      .delete(expenses)
-      .where(
-        and(
-          eq(expenses.loadId, loadId),
-          eq(expenses.expenseDate, recordDate),
-          eq(expenses.expenseType, "feeds"),
-        ),
-      );
+      if (latestAlloc.length > 0) {
+        // FIX: Wrap DB string in Number() before adding, then cast back to String
+        const currentRemaining = Number(latestAlloc[0].remainingInBuilding);
+        await db
+          .update(feedAllocations)
+          .set({
+            remainingInBuilding: String(currentRemaining + consumed),
+          })
+          .where(eq(feedAllocations.id, latestAlloc[0].id));
+      }
+    }
 
-    // 4. Delete the actual record
+    // 2. Delete the actual record
     await db.delete(dailyRecords).where(eq(dailyRecords.id, id));
 
     revalidatePath("/production/monitoring");
@@ -195,13 +178,66 @@ export async function deleteDailyRecord(id: number) {
 // ==========================================
 export async function updateDailyRecord(id: number, formData: FormData) {
   try {
-    const mortality = Number(formData.get("mortality")) || 0;
-    const feedsConsumed = (formData.get("feedsConsumed") as string) || "0";
+    const record = await db
+      .select()
+      .from(dailyRecords)
+      .where(eq(dailyRecords.id, id))
+      .limit(1);
+    if (record.length === 0) return { error: "Record not found" };
+
+    const oldConsumed = Number(record[0].feedsConsumed);
+    const feedType = (formData.get("feedType") as string) || record[0].feedType;
+
+    const mortalityAm = Number(formData.get("mortalityAm")) || 0;
+    const mortalityPm = Number(formData.get("mortalityPm")) || 0;
+    const mortality = mortalityAm + mortalityPm;
+
+    const feedsConsumedAm = Number(formData.get("feedsConsumedAm")) || 0;
+    const feedsConsumedPm = Number(formData.get("feedsConsumedPm")) || 0;
+    const newTotalFeedsConsumed = feedsConsumedAm + feedsConsumedPm;
+
     const remarks = formData.get("remarks") as string;
+
+    // Calculate inventory difference
+    const difference = newTotalFeedsConsumed - oldConsumed;
+
+    if (difference !== 0 && feedType) {
+      const latestAlloc = await db
+        .select()
+        .from(feedAllocations)
+        .where(
+          and(
+            eq(feedAllocations.loadId, record[0].loadId),
+            eq(feedAllocations.feedType, feedType),
+          ),
+        )
+        .orderBy(desc(feedAllocations.allocatedDate), desc(feedAllocations.id))
+        .limit(1);
+
+      if (latestAlloc.length > 0) {
+        // FIX: Wrap DB string in Number() before subtracting, then cast back to String
+        const currentRemaining = Number(latestAlloc[0].remainingInBuilding);
+        await db
+          .update(feedAllocations)
+          .set({
+            remainingInBuilding: String(currentRemaining - difference),
+          })
+          .where(eq(feedAllocations.id, latestAlloc[0].id));
+      }
+    }
 
     await db
       .update(dailyRecords)
-      .set({ mortality, feedsConsumed, remarks: remarks || null })
+      .set({
+        mortalityAm,
+        mortalityPm,
+        mortality,
+        feedType: feedType || null,
+        feedsConsumedAm: String(feedsConsumedAm),
+        feedsConsumedPm: String(feedsConsumedPm),
+        feedsConsumed: String(newTotalFeedsConsumed),
+        remarks: remarks || null,
+      })
       .where(eq(dailyRecords.id, id));
 
     revalidatePath("/production/monitoring");
@@ -211,82 +247,9 @@ export async function updateDailyRecord(id: number, formData: FormData) {
   }
 }
 
-// ==========================================
-// 4. NEW: TRANSFER FEED STOCK ACTION
-// ==========================================
 export async function transferFeedStock(formData: FormData) {
-  const userId = await getAuthUserId();
-  if (!userId) return { error: "Unauthorized." };
-
-  const sourceLoadId = Number(formData.get("sourceLoadId"));
-  const targetLoadId = Number(formData.get("targetLoadId"));
-  const feedType = formData.get("feedType") as string;
-  const quantity = Number(formData.get("quantity"));
-  const transferDate = formData.get("transferDate") as string;
-  const remarks = formData.get("remarks") as string;
-
-  if (
-    !sourceLoadId ||
-    !targetLoadId ||
-    !feedType ||
-    !quantity ||
-    !transferDate
-  ) {
-    return { error: "Missing required fields." };
-  }
-  if (sourceLoadId === targetLoadId) {
-    return { error: "Cannot transfer to the same building." };
-  }
-
-  try {
-    // 1. Get the cost value of the feed from the SOURCE building so we can carry it over
-    const lastDelivery = await db
-      .select({ costPerBag: feedTransactions.costPerBag })
-      .from(feedTransactions)
-      .where(
-        and(
-          eq(feedTransactions.loadId, sourceLoadId),
-          eq(feedTransactions.feedType, feedType),
-          inArray(feedTransactions.transactionType, [
-            "DELIVERY_IN",
-            "TRANSFER_IN",
-          ]),
-        ),
-      )
-      .orderBy(desc(feedTransactions.createdAt))
-      .limit(1);
-
-    // THE FIX: Use "0" (a string) because Drizzle maps numeric database columns to strings!
-    const costPerBag = lastDelivery[0]?.costPerBag || "0";
-
-    // 2. DEDUCT from Source Building (TRANSFER_OUT)
-    await db.insert(feedTransactions).values({
-      loadId: sourceLoadId,
-      feedType,
-      transactionType: "TRANSFER_OUT",
-      quantity: -quantity, // Negative
-      costPerBag,
-      transactionDate: transferDate,
-      recordedBy: userId,
-      remarks: `Transferred OUT to Load ${targetLoadId}. ${remarks}`,
-    });
-
-    // 3. ADD to Target Building (TRANSFER_IN)
-    await db.insert(feedTransactions).values({
-      loadId: targetLoadId,
-      feedType,
-      transactionType: "TRANSFER_IN",
-      quantity: quantity, // Positive
-      costPerBag, // Passing the price over!
-      transactionDate: transferDate,
-      recordedBy: userId,
-      remarks: `Transferred IN from Load ${sourceLoadId}. ${remarks}`,
-    });
-
-    revalidatePath("/production/monitoring");
-    return { success: true };
-  } catch (error) {
-    console.error("Transfer Error:", error);
-    return { error: "Failed to process transfer." };
-  }
+  return {
+    error:
+      "Feed Transfers are now securely managed in the Main Warehouse Inventory Tab!",
+  };
 }

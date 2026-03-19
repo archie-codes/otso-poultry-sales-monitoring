@@ -27,7 +27,7 @@ export default function KPISection({
     `₱${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
-    <div className="lg:col-span-8 xl:col-span-8 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
       {/* 1. GLOBAL NET SALES */}
       <Dialog>
         <DialogTrigger asChild>
@@ -38,22 +38,22 @@ export default function KPISection({
                 Global Net Sales
               </p>
             </div>
-            <h3 className="text-base sm:text-lg lg:text-xl xl:text-2xl font-black truncate">
+            <h3 className="text-base sm:text-lg font-black truncate">
               {formatMoney(globalTotals.totalNetSales)}
             </h3>
           </div>
         </DialogTrigger>
         <DialogContent className="rounded-[2rem] max-w-lg border-border/50">
           <DialogHeader className="bg-emerald-50 dark:bg-emerald-950/30 -mx-6 -mt-6 p-6 border-b border-emerald-100 dark:border-emerald-900/50 rounded-t-[2rem]">
-            <DialogTitle className="text-2xl font-black text-emerald-700 dark:text-emerald-500 flex items-center gap-2">
+            <DialogTitle className="text-xl font-black text-emerald-700 dark:text-emerald-500 flex items-center gap-2">
               <TrendingUp className="w-6 h-6" /> Net Sales Breakdown
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 space-y-3 py-4">
+          <div className="max-h-[60vh] overflow-y-auto custom-scrollbar space-y-3 py-4 px-2">
             {reports.map((r) => (
               <div
                 key={r.id}
-                className="flex justify-between items-center p-3 bg-secondary/30 rounded-xl"
+                className="flex justify-between items-center p-4 bg-secondary/30 rounded-xl"
               >
                 <div>
                   <p className="font-bold text-sm uppercase text-foreground">
@@ -87,22 +87,22 @@ export default function KPISection({
                 Global Capital
               </p>
             </div>
-            <h3 className="text-base sm:text-lg lg:text-xl xl:text-2xl font-black truncate">
+            <h3 className="text-base sm:text-lg font-black truncate">
               {formatMoney(globalTotals.totalCapital)}
             </h3>
           </div>
         </DialogTrigger>
         <DialogContent className="rounded-[2rem] max-w-lg border-border/50">
           <DialogHeader className="bg-blue-50 dark:bg-blue-950/30 -mx-6 -mt-6 p-6 border-b border-blue-100 dark:border-blue-900/50 rounded-t-[2rem]">
-            <DialogTitle className="text-2xl font-black text-blue-700 dark:text-blue-500 flex items-center gap-2">
+            <DialogTitle className="text-xl font-black text-blue-700 dark:text-blue-500 flex items-center gap-2">
               <DollarSign className="w-6 h-6" /> Deployed Capital
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 space-y-3 py-4">
+          <div className="max-h-[60vh] overflow-y-auto custom-scrollbar space-y-3 py-4 px-2">
             {reports.map((r) => (
               <div
                 key={r.id}
-                className="flex justify-between items-center p-3 bg-secondary/30 rounded-xl"
+                className="flex justify-between items-center p-4 bg-secondary/30 rounded-xl"
               >
                 <div>
                   <p className="font-bold text-sm uppercase text-foreground">
@@ -131,18 +131,18 @@ export default function KPISection({
                 Live Birds
               </p>
             </div>
-            <h3 className="text-base sm:text-lg lg:text-xl xl:text-2xl font-black truncate">
+            <h3 className="text-base sm:text-lg font-black truncate">
               {globalTotals.activeBirds.toLocaleString()}
             </h3>
           </div>
         </DialogTrigger>
         <DialogContent className="rounded-[2rem] max-w-lg border-border/50">
           <DialogHeader className="bg-slate-100 dark:bg-slate-900 -mx-6 -mt-6 p-6 border-b border-border/50 rounded-t-[2rem]">
-            <DialogTitle className="text-2xl font-black text-foreground flex items-center gap-2">
+            <DialogTitle className="text-xl font-black text-foreground flex items-center gap-2">
               <Warehouse className="w-6 h-6" /> Live Bird Locations
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 space-y-3 py-4">
+          <div className="max-h-[60vh] overflow-y-auto custom-scrollbar space-y-3 py-4 px-2">
             {reports
               .filter((r) => r.isActive)
               .map((r) => {
@@ -151,7 +151,7 @@ export default function KPISection({
                 return (
                   <div
                     key={r.id}
-                    className="flex justify-between items-center p-3 bg-secondary/30 rounded-xl border border-border/50"
+                    className="flex justify-between items-center p-4 bg-secondary/30 rounded-xl border border-border/50"
                   >
                     <div>
                       <p className="font-bold text-sm uppercase text-foreground">
@@ -186,24 +186,24 @@ export default function KPISection({
                 Total Mortality
               </p>
             </div>
-            <h3 className="text-base sm:text-lg lg:text-xl xl:text-2xl font-black truncate">
+            <h3 className="text-base sm:text-lg font-black truncate">
               {globalTotals.totalMortality.toLocaleString()}
             </h3>
           </div>
         </DialogTrigger>
         <DialogContent className="rounded-[2rem] max-w-lg border-border/50">
           <DialogHeader className="bg-red-50 dark:bg-red-950/30 -mx-6 -mt-6 p-6 border-b border-red-100 dark:border-red-900/50 rounded-t-[2rem]">
-            <DialogTitle className="text-2xl font-black text-red-700 dark:text-red-500 flex items-center gap-2">
+            <DialogTitle className="text-xl font-black text-red-700 dark:text-red-500 flex items-center gap-2">
               <AlertTriangle className="w-6 h-6" /> Mortality Report
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 space-y-3 py-4">
+          <div className="max-h-[60vh] overflow-y-auto custom-scrollbar space-y-3 py-4 px-2">
             {reports
               .filter((r) => r.farmMortality > 0)
               .map((r) => (
                 <div
                   key={r.id}
-                  className="flex justify-between items-center p-3 bg-secondary/30 rounded-xl"
+                  className="flex justify-between items-center p-4 bg-secondary/30 rounded-xl"
                 >
                   <div>
                     <p className="font-bold text-sm uppercase text-foreground">

@@ -8,7 +8,6 @@ import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import henIcon from "@/public/hen.svg";
 
-// Merged Icons needed for both Navbar and Mobile Menu
 import {
   Moon,
   Sun,
@@ -25,7 +24,9 @@ import {
   ShieldAlert,
   ChevronDown,
   Package,
-  LineChart, // <-- Added for Batch Summary
+  LineChart,
+  Warehouse, // <-- NEW
+  Building2, // <-- NEW
 } from "lucide-react";
 
 import {
@@ -53,7 +54,6 @@ const HenIcon = ({ className }: { className?: string }) => {
   );
 };
 
-// --- TypeScript Definitions ---
 type NavItem = {
   name: string;
   href?: string;
@@ -69,9 +69,8 @@ type NavGroup = {
   label: string;
   items: NavItem[];
 };
-// ----------------------------------
 
-// EXACT MATCH TO SIDEBAR (Plus the new Batch Summary!)
+// ---> UPGRADED NAVIGATION GROUPS <---
 const ownerGroups: NavGroup[] = [
   {
     label: "Operations",
@@ -84,7 +83,18 @@ const ownerGroups: NavGroup[] = [
         href: "/production/monitoring",
         icon: Activity,
       },
-      { name: "Feed Inventory", href: "/inventory", icon: Package },
+      {
+        name: "Feed Inventory",
+        icon: Package,
+        subItems: [
+          { name: "Main Warehouse", href: "/inventory", icon: Warehouse },
+          {
+            name: "Building Stocks",
+            href: "/inventory/building-stocks",
+            icon: Building2,
+          },
+        ],
+      },
     ],
   },
   {
@@ -95,7 +105,7 @@ const ownerGroups: NavGroup[] = [
         name: "Batch Summary",
         href: "/finance/batch-summary",
         icon: LineChart,
-      }, // <-- Added!
+      },
       { name: "Master Reports", href: "/reports", icon: FileBarChart },
       { name: "Historical Ledger", href: "/reports/history", icon: Archive },
     ],
@@ -125,7 +135,18 @@ const staffGroups: NavGroup[] = [
         icon: Activity,
       },
       { name: "Expenses", href: "/expenses", icon: TrendingDown },
-      { name: "Feed Inventory", href: "/inventory", icon: Package },
+      {
+        name: "Feed Inventory",
+        icon: Package,
+        subItems: [
+          { name: "Main Warehouse", href: "/inventory", icon: Warehouse },
+          {
+            name: "Building Stocks",
+            href: "/inventory/building-stocks",
+            icon: Building2,
+          },
+        ],
+      },
     ],
   },
 ];
@@ -144,18 +165,20 @@ export default function Navbar({
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
 
-  // State to control the mobile menu drawer
   const [isOpen, setIsOpen] = useState(false);
 
-  // State to control Settings Sub-Menu
-  const [isSettingsOpen, setIsSettingsOpen] = useState(
-    pathname.startsWith("/settings"),
-  );
+  // ---> UPGRADED DYNAMIC MENU STATE <---
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
+    Settings: pathname.startsWith("/settings"),
+    "Feed Inventory": pathname.startsWith("/inventory"),
+  });
 
-  // Determine which links to show based on the user's role
+  const toggleMenu = (name: string) => {
+    setOpenMenus((prev) => ({ ...prev, [name]: !prev[name] }));
+  };
+
   const navGroups = role === "owner" ? ownerGroups : staffGroups;
 
-  // Helper function to get initials
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -167,7 +190,6 @@ export default function Navbar({
 
   return (
     <header className="h-16 border-b border-border/50 bg-background/50 backdrop-blur-xl flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
-      {/* LEFT SIDE: Hamburger Menu + System Title */}
       <div className="flex items-center gap-4">
         {/* MOBILE HAMBURGER MENU */}
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -184,7 +206,6 @@ export default function Navbar({
           >
             <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
 
-            {/* Mobile Brand Header */}
             <div className="h-16 flex items-center px-6 border-b border-border/40">
               <div className="relative h-8 w-8 mr-3 shrink-0 flex items-center justify-center">
                 <Image
@@ -200,7 +221,6 @@ export default function Navbar({
               </span>
             </div>
 
-            {/* Mobile Navigation Links */}
             <div className="flex-1 py-6 flex flex-col gap-6 px-4 overflow-y-auto custom-scrollbar">
               {navGroups.map((group) => (
                 <div key={group.label} className="flex flex-col gap-1">
@@ -209,9 +229,14 @@ export default function Navbar({
                   </h3>
 
                   {group.items.map((item) => {
-                    // IF THIS ITEM HAS SUB-ITEMS (Settings)
+                    // IF THIS ITEM HAS SUB-ITEMS
                     if (item.subItems) {
-                      const isAnySubActive = pathname.startsWith("/settings");
+                      const isMenuOpen = openMenus[item.name];
+                      const isAnySubActive = item.subItems.some(
+                        (sub) =>
+                          pathname === sub.href ||
+                          pathname.startsWith(sub.href + "/"),
+                      );
 
                       return (
                         <div
@@ -219,7 +244,7 @@ export default function Navbar({
                           className="flex flex-col gap-1 mt-1"
                         >
                           <button
-                            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                            onClick={() => toggleMenu(item.name)}
                             className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group w-full ${
                               isAnySubActive
                                 ? "text-slate-900 font-bold dark:text-white"
@@ -231,13 +256,11 @@ export default function Navbar({
                               <span className="text-sm">{item.name}</span>
                             </div>
                             <ChevronDown
-                              className={`h-4 w-4 transition-transform duration-200 ${
-                                isSettingsOpen ? "rotate-180" : ""
-                              }`}
+                              className={`h-4 w-4 transition-transform duration-200 ${isMenuOpen ? "rotate-180" : ""}`}
                             />
                           </button>
 
-                          {isSettingsOpen && (
+                          {isMenuOpen && (
                             <div className="flex flex-col gap-1 pl-4 mt-1 border-l-2 border-border/50 ml-5 animate-in slide-in-from-top-2 fade-in duration-200">
                               {item.subItems.map((subItem) => {
                                 const isStrictActive =
@@ -246,7 +269,7 @@ export default function Navbar({
                                   <Link
                                     key={subItem.name}
                                     href={subItem.href}
-                                    onClick={() => setIsOpen(false)} // Close drawer on click!
+                                    onClick={() => setIsOpen(false)}
                                     className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group ${
                                       isStrictActive
                                         ? "bg-slate-100 text-blue-900 font-bold dark:bg-slate-800 dark:text-white shadow-sm"
@@ -254,11 +277,7 @@ export default function Navbar({
                                     }`}
                                   >
                                     <subItem.icon
-                                      className={`h-4 w-4 ${
-                                        isStrictActive
-                                          ? "text-slate-900 dark:text-white"
-                                          : ""
-                                      }`}
+                                      className={`h-4 w-4 ${isStrictActive ? "text-slate-900 dark:text-white" : ""}`}
                                     />
                                     <span className="text-[13px]">
                                       {subItem.name}
@@ -285,7 +304,7 @@ export default function Navbar({
                       <Link
                         key={item.name}
                         href={itemHref}
-                        onClick={() => setIsOpen(false)} // Close drawer on click!
+                        onClick={() => setIsOpen(false)}
                         className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
                           isStrictActive
                             ? "bg-slate-100 text-slate-900 font-bold dark:bg-slate-800 dark:text-white shadow-sm"
@@ -307,7 +326,6 @@ export default function Navbar({
               ))}
             </div>
 
-            {/* Mobile Logout */}
             <div className="p-4 border-t border-border/40 bg-card/50">
               <button
                 onClick={() => {
@@ -323,13 +341,11 @@ export default function Navbar({
           </SheetContent>
         </Sheet>
 
-        {/* Desktop Title */}
         <h2 className="text-lg font-semibold tracking-tight hidden sm:block dark:text-white text-black">
           Sales Monitoring System
         </h2>
       </div>
 
-      {/* RIGHT SIDE: Theme, Notifications, Profile */}
       <div className="flex items-center gap-4 sm:gap-5">
         <button
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -340,12 +356,10 @@ export default function Navbar({
           <span className="sr-only">Toggle theme</span>
         </button>
 
-        {/* Dynamic Notification Bell */}
         {userId && role === "owner" && (
           <NotificationBell userId={Number(userId)} />
         )}
 
-        {/* User Profile Section */}
         <div className="flex items-center gap-3 border-l border-border/50 pl-4 sm:pl-5 ml-1">
           <div className="hidden sm:flex flex-col text-right">
             <span className="text-sm font-semibold leading-none dark:text-white text-black">

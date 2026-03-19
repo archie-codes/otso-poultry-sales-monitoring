@@ -74,6 +74,8 @@ export const loads = pgTable("loads", {
     .references(() => buildings.id)
     .notNull(),
 
+  name: text("name"),
+
   customerName: text("customer_name"),
   chickType: text("chick_type"),
   loadDate: date("load_date").notNull(),
@@ -100,12 +102,24 @@ export const dailyRecords = pgTable("daily_records", {
   loadId: integer("load_id")
     .references(() => loads.id)
     .notNull(),
-
   recordDate: date("record_date").notNull(),
-  mortality: integer("mortality").notNull().default(0),
-  feedsConsumed: numeric("feeds_consumed", { precision: 10, scale: 2 })
+
+  // ---> NEW: AM & PM MORTALITY <---
+  mortalityAm: integer("mortality_am").notNull().default(0),
+  mortalityPm: integer("mortality_pm").notNull().default(0),
+  mortality: integer("mortality").notNull().default(0), // This becomes the TOTAL
+
+  // ---> NEW: AM & PM FEEDS & FEED TYPE <---
+  feedType: varchar("feed_type", { length: 50 }), // e.g., "BOOSTER", "STARTER"
+  feedsConsumedAm: numeric("feeds_consumed_am", { precision: 10, scale: 2 })
     .notNull()
     .default("0"),
+  feedsConsumedPm: numeric("feeds_consumed_pm", { precision: 10, scale: 2 })
+    .notNull()
+    .default("0"),
+  feedsConsumed: numeric("feeds_consumed", { precision: 10, scale: 2 })
+    .notNull()
+    .default("0"), // This becomes the TOTAL
 
   remarks: text("remarks"),
   recordedBy: integer("recorded_by")
@@ -130,7 +144,7 @@ export const expenses = pgTable("expenses", {
 
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   expenseDate: date("expense_date").notNull(),
-
+  remarks: text("remarks"),
   recordedBy: integer("recorded_by")
     .references(() => users.id)
     .notNull(),
@@ -186,39 +200,58 @@ export const notifications = pgTable("notifications", {
 });
 
 // ==========================================
-// FEED INVENTORY LEDGER
+// 1. TIER 1: MAIN WAREHOUSE (Supplier Deliveries)
 // ==========================================
-export const feedTransactions = pgTable("feed_transactions", {
+export const feedDeliveries = pgTable("feed_deliveries", {
   id: serial("id").primaryKey(),
+  supplierName: varchar("supplier_name", { length: 255 }).notNull(),
+  deliveryDate: date("delivery_date").notNull(),
+  feedType: varchar("feed_type", { length: 100 }).notNull(),
 
-  // Which specific batch/building does this feed belong to?
-  // We use cascade so if a load is deleted, its feed history goes with it to prevent orphaned data.
-  loadId: integer("load_id").references(() => loads.id, {
-    onDelete: "cascade",
-  }),
+  // ---> UPGRADED TO NUMERIC TO SUPPORT FRACTIONS <---
+  quantity: numeric("quantity", { precision: 10, scale: 2 }).notNull(),
+  unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull(),
+  cashBond: numeric("cash_bond", { precision: 12, scale: 2 })
+    .default("0")
+    .notNull(),
 
-  // The specific type of feed (BOOSTER, STARTER, GROWER, FINISHER)
-  feedType: varchar("feed_type", { length: 50 }).notNull(),
+  // ---> UPGRADED TO NUMERIC <---
+  remainingQuantity: numeric("remaining_quantity", {
+    precision: 10,
+    scale: 2,
+  }).notNull(),
 
-  // What kind of movement is this?
-  // (DELIVERY_IN, DAILY_CONSUMPTION, TRANSFER_IN, TRANSFER_OUT, ADJUSTMENT)
-  transactionType: varchar("transaction_type", { length: 50 }).notNull(),
-
-  // Number of sacks/bags.
-  // Deliveries will be positive numbers (e.g., 500).
-  // Consumptions/Transfers Out will be negative numbers (e.g., -15).
-  quantity: integer("quantity").notNull(),
-
-  // The cost per sack (Important for deliveries so we can calculate total expenses later)
-  costPerBag: decimal("cost_per_bag", { precision: 10, scale: 2 }),
-
-  supplierName: varchar("supplier_name", { length: 100 }),
-  referenceNumber: varchar("reference_number", { length: 100 }), // e.g., Delivery Receipt or Invoice #
-
-  transactionDate: date("transaction_date").notNull(),
-  remarks: text("remarks"),
-
+  recordedBy: integer("recorded_by").references(() => users.id), // (assuming users table exists)
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  // Assuming you have a users table. If not, you can remove this line!
+});
+
+// ==========================================
+// 2. TIER 2: BUILDING SUB-INVENTORY (Transfers)
+// ==========================================
+export const feedAllocations = pgTable("feed_allocations", {
+  id: serial("id").primaryKey(),
+  deliveryId: integer("delivery_id")
+    .references(() => feedDeliveries.id)
+    .notNull(),
+  loadId: integer("load_id")
+    .references(() => loads.id, { onDelete: "cascade" }) // (assuming loads table exists)
+    .notNull(),
+
+  allocatedDate: date("allocated_date").notNull(),
+  feedType: varchar("feed_type", { length: 100 }).notNull(),
+
+  // ---> UPGRADED TO NUMERIC <---
+  allocatedQuantity: numeric("allocated_quantity", {
+    precision: 10,
+    scale: 2,
+  }).notNull(),
+
+  // ---> UPGRADED TO NUMERIC <---
+  remainingInBuilding: numeric("remaining_in_building", {
+    precision: 10,
+    scale: 2,
+  }).notNull(),
+
   recordedBy: integer("recorded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });

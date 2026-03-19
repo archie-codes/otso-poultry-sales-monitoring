@@ -87,12 +87,16 @@ export default function AddLoadModal({
   const [chickType, setChickType] = useState("");
   const [openChickType, setOpenChickType] = useState(false);
 
+  // ---> NEW: CALENDAR AUTO-CLOSE STATES <---
   const [loadDate, setLoadDate] = useState<Date | undefined>(new Date());
+  const [openLoadDate, setOpenLoadDate] = useState(false);
+
   const [harvestDate, setHarvestDate] = useState<Date | undefined>(
     addMonths(new Date(), 4),
   );
+  const [openHarvestDate, setOpenHarvestDate] = useState(false);
 
-  // --- NEW: REAL-TIME MATH STATES ---
+  // --- REAL-TIME MATH STATES ---
   const [quantityInput, setQuantityInput] = useState("");
   const [pricePerChickInput, setPricePerChickInput] = useState("");
 
@@ -130,6 +134,9 @@ export default function AddLoadModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
+    const formData = new FormData(e.currentTarget);
+    const batchName = formData.get("name") as string;
+
     if (!selectedFarm) {
       toast.error("Missing Field", {
         description: "Please select a farm first.",
@@ -144,6 +151,13 @@ export default function AddLoadModal({
       return;
     }
 
+    if (!batchName || batchName.trim() === "") {
+      toast.error("Missing Field", {
+        description: "Please enter a Batch / Load Name.",
+      });
+      return;
+    }
+
     if (!chickType) {
       toast.error("Missing Field", {
         description: "Please select the Type of Chick.",
@@ -151,7 +165,7 @@ export default function AddLoadModal({
       return;
     }
 
-    // ---> NEW: LOAD DATE SAFETY LOCKS <---
+    // ---> LOAD DATE SAFETY LOCKS <---
     const today = new Date();
     today.setHours(23, 59, 59, 999); // Allow any time today
 
@@ -173,7 +187,6 @@ export default function AddLoadModal({
     // --------------------------------------
 
     setLoading(true);
-    const formData = new FormData(e.currentTarget);
 
     formData.set("buildingId", buildingId);
     formData.set("chickType", chickType);
@@ -219,6 +232,7 @@ export default function AddLoadModal({
     }
     setLoading(false);
   }
+
   return (
     <>
       <Button
@@ -233,7 +247,7 @@ export default function AddLoadModal({
         mounted &&
         createPortal(
           <div className="fixed inset-0 z-100 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="fixed z-101 w-full max-w-2xl border bg-background p-6 shadow-2xl rounded-3xl max-h-[90vh] overflow-y-auto">
+            <div className="fixed z-101 w-full max-w-3xl border bg-background p-6 shadow-2xl rounded-3xl max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <div>
                   <h2 className="text-2xl font-black text-blue-600">
@@ -396,7 +410,7 @@ export default function AddLoadModal({
                     <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                       Load Date <span className="text-red-500">*</span>
                     </label>
-                    <Popover>
+                    <Popover open={openLoadDate} onOpenChange={setOpenLoadDate}>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
@@ -418,7 +432,10 @@ export default function AddLoadModal({
                         <Calendar
                           mode="single"
                           selected={loadDate}
-                          onSelect={handleLoadDateChange}
+                          onSelect={(date) => {
+                            handleLoadDateChange(date);
+                            setOpenLoadDate(false); // Auto-close
+                          }}
                           initialFocus
                         />
                       </PopoverContent>
@@ -432,7 +449,10 @@ export default function AddLoadModal({
                         (4 Months Estimated)
                       </span>
                     </label>
-                    <Popover>
+                    <Popover
+                      open={openHarvestDate}
+                      onOpenChange={setOpenHarvestDate}
+                    >
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
@@ -454,7 +474,10 @@ export default function AddLoadModal({
                         <Calendar
                           mode="single"
                           selected={harvestDate}
-                          onSelect={setHarvestDate}
+                          onSelect={(date) => {
+                            setHarvestDate(date);
+                            setOpenHarvestDate(false); // Auto-close
+                          }}
                           initialFocus
                         />
                       </PopoverContent>
@@ -462,7 +485,20 @@ export default function AddLoadModal({
                   </div>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-5">
+                {/* 3-COLUMN BATCH DETAILS GRID */}
+                <div className="grid md:grid-cols-3 gap-5">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      Batch Name <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      name="name"
+                      required
+                      placeholder="e.g. Loading 1"
+                      className="h-12 rounded-xl border-input px-4 font-bold"
+                    />
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                       Type of Chick <span className="text-red-500">*</span>
@@ -500,7 +536,7 @@ export default function AddLoadModal({
                                           b.toLowerCase() === v.toLowerCase(),
                                       ) || v;
                                     setChickType(selectedBreed);
-                                    setOpenChickType(false);
+                                    setOpenChickType(false); // Also auto-closing the combobox!
                                   }}
                                   className="py-2.5 px-4 cursor-pointer"
                                 >
@@ -521,6 +557,7 @@ export default function AddLoadModal({
                       </PopoverContent>
                     </Popover>
                   </div>
+
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                       Supplier / Source
