@@ -74,8 +74,9 @@ export async function getLoadTotalCosts(loadId: number) {
     )
     .where(eq(feedAllocations.loadId, loadId));
 
+  // ---> THE FIX: Safely cast allocatedQty to Number <---
   const feedCosts = allocations.reduce(
-    (sum, a) => sum + a.allocatedQty * Number(a.unitPrice),
+    (sum, a) => sum + Number(a.allocatedQty) * Number(a.unitPrice),
     0,
   );
 
