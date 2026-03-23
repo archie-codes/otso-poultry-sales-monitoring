@@ -7,6 +7,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../lib/auth";
 import { Toaster } from "@/components/ui/sonner";
 import AuthProvider from "../components/AuthProvider";
+import NetworkStatus from "@/components/NetworkStatus";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -61,6 +62,7 @@ export default async function RootLayout({
               mobile navigation elements or your action modals.
           */}
           <Toaster richColors position="top-right" closeButton />
+          <NetworkStatus />
         </ThemeProvider>
       </body>
     </html>

@@ -311,7 +311,7 @@ export default async function Dashboard() {
               )}
             </div>
             <div className="mt-4">
-              <p className="text-3xl font-black tracking-tight text-foreground">
+              <p className="text-xl font-black tracking-tight text-foreground">
                 <AnimatedCounter value={stat.value} formatType={stat.format} />
               </p>
               <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mt-1">

@@ -11,7 +11,7 @@ import {
   MapPin,
   Check,
   ChevronsUpDown,
-  PlusCircle, // Added for the custom input icon
+  PlusCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -60,10 +60,11 @@ export default function AddFarmModal() {
 
   // CASCADING STATE
   const [provinceCode, setProvinceCode] = useState("");
-  const [cityCode, setCityCode] = useState("");
+  const [cityCode, setCityCode] = useState(""); // Can now hold a custom string too!
   const [barangayName, setBarangayName] = useState("");
 
-  // SEARCH STATE FOR CUSTOM BARANGAY
+  // SEARCH STATE FOR CUSTOM INPUTS
+  const [citySearch, setCitySearch] = useState(""); // <--- NEW
   const [brgySearch, setBrgySearch] = useState("");
 
   // UI STATE FOR SEARCH BOXES
@@ -93,11 +94,19 @@ export default function AddFarmModal() {
 
   const availableBarangays = useMemo(() => {
     if (!cityCode) return [];
+    // If the cityCode is actually a custom string, getBarangayByMun returns undefined, which is what we want!
     const raw = (getBarangayByMun(cityCode) as Barangay[]) || [];
     return Array.from(new Set(raw.map((b) => b.name.toUpperCase()))).sort();
   }, [cityCode]);
 
-  // Check if the user's search text exists in the database
+  // ---> NEW: Check if the user's city search text exists in the database
+  const showCustomCityOption =
+    citySearch.trim().length > 0 &&
+    !availableCities.some(
+      (c) => c.name.toUpperCase() === citySearch.trim().toUpperCase(),
+    );
+
+  // Check if the user's brgy search text exists in the database
   const showCustomBrgyOption =
     brgySearch.trim().length > 0 &&
     !availableBarangays.some(
@@ -108,13 +117,15 @@ export default function AddFarmModal() {
   const handleProvinceSelect = (code: string) => {
     setProvinceCode(code);
     setCityCode("");
+    setCitySearch(""); // Reset search
     setBarangayName("");
     setBrgySearch(""); // Reset search
     setOpenProv(false);
   };
 
-  const handleCitySelect = (code: string) => {
-    setCityCode(code);
+  const handleCitySelect = (codeOrName: string) => {
+    setCityCode(codeOrName);
+    setCitySearch(""); // Reset search
     setBarangayName("");
     setBrgySearch(""); // Reset search
     setOpenCity(false);
@@ -131,9 +142,10 @@ export default function AddFarmModal() {
     const selectedProvince = availableProvinces.find(
       (p) => p.prov_code === provinceCode,
     )?.name;
-    const selectedCity = availableCities.find(
-      (c) => c.mun_code === cityCode,
-    )?.name;
+
+    // THE FIX: If it's a standard city, get the name. If it's custom, use the raw cityCode string.
+    const matchedCity = availableCities.find((c) => c.mun_code === cityCode);
+    const selectedCity = matchedCity ? matchedCity.name : cityCode;
 
     if (!selectedProvince || !selectedCity || !barangayName) {
       toast.error("Missing Info", {
@@ -162,11 +174,17 @@ export default function AddFarmModal() {
       setIsOpen(false);
       setProvinceCode("");
       setCityCode("");
+      setCitySearch("");
       setBarangayName("");
       setBrgySearch("");
     }
     setLoading(false);
   }
+
+  // Display helpers for the UI Buttons
+  const displayCityName = cityCode
+    ? availableCities.find((c) => c.mun_code === cityCode)?.name || cityCode // Show matched name OR the custom typed name
+    : "Search city...";
 
   return (
     <>
@@ -226,7 +244,7 @@ export default function AddFarmModal() {
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-200">
                         <Command>
                           <CommandInput placeholder="Type province..." />
                           <CommandList className="max-h-[200px] overflow-y-auto custom-scrollbar">
@@ -258,7 +276,7 @@ export default function AddFarmModal() {
                     </Popover>
                   </div>
 
-                  {/* CITY SEARCH */}
+                  {/* ---> UPGRADED CITY SEARCH (CREATABLE) <--- */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold">City *</label>
                     <Popover open={openCity} onOpenChange={setOpenCity}>
@@ -269,21 +287,26 @@ export default function AddFarmModal() {
                           disabled={!provinceCode}
                           className="w-full h-11 justify-between rounded-xl font-normal border-input disabled:opacity-50"
                         >
-                          <span className="truncate">
-                            {cityCode
-                              ? availableCities.find(
-                                  (c) => c.mun_code === cityCode,
-                                )?.name
-                              : "Search city..."}
-                          </span>
+                          <span className="truncate">{displayCityName}</span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-200">
                         <Command>
-                          <CommandInput placeholder="Type city..." />
+                          <CommandInput
+                            placeholder="Type city..."
+                            value={citySearch}
+                            onValueChange={setCitySearch}
+                            className="uppercase"
+                          />
                           <CommandList className="max-h-[200px] overflow-y-auto custom-scrollbar">
-                            <CommandEmpty>No city found.</CommandEmpty>
+                            <CommandEmpty className="p-4 text-center text-sm text-muted-foreground">
+                              No city found in our database.
+                              <br />
+                              <span className="text-primary font-medium">
+                                Type the name above to add it manually.
+                              </span>
+                            </CommandEmpty>
                             <CommandGroup>
                               {availableCities.map((city) => (
                                 <CommandItem
@@ -304,6 +327,22 @@ export default function AddFarmModal() {
                                   {city.name}
                                 </CommandItem>
                               ))}
+
+                              {/* DYNAMIC CUSTOM CITY ADD BUTTON */}
+                              {showCustomCityOption && (
+                                <CommandItem
+                                  value={citySearch}
+                                  onSelect={() =>
+                                    handleCitySelect(
+                                      citySearch.trim().toUpperCase(),
+                                    )
+                                  }
+                                  className="font-bold text-primary cursor-pointer border-t border-border mt-1 pt-2"
+                                >
+                                  <PlusCircle className="mr-2 h-4 w-4" />
+                                  Use "{citySearch.trim().toUpperCase()}"
+                                </CommandItem>
+                              )}
                             </CommandGroup>
                           </CommandList>
                         </Command>
@@ -328,7 +367,7 @@ export default function AddFarmModal() {
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-200">
                         <Command>
                           <CommandInput
                             placeholder="Type barangay..."
@@ -364,7 +403,7 @@ export default function AddFarmModal() {
                                 </CommandItem>
                               ))}
 
-                              {/* DYNAMIC CUSTOM ADD BUTTON */}
+                              {/* DYNAMIC CUSTOM BARANGAY ADD BUTTON */}
                               {showCustomBrgyOption && (
                                 <CommandItem
                                   value={brgySearch}
@@ -384,9 +423,9 @@ export default function AddFarmModal() {
                         </Command>
                       </PopoverContent>
                     </Popover>
-                    <p className="text-[11px] text-muted-foreground">
-                      If your barangay is missing from the list, simply type it
-                      into the search box to add it manually.
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      If your city or barangay is missing from the list, simply
+                      type it into the search box to add it manually.
                     </p>
                   </div>
                 </div>

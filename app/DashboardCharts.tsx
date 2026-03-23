@@ -136,10 +136,44 @@ export function LiveClock() {
   );
 }
 
+// ============================================================================
+// THE FIX: UNIVERSAL TAILWIND TOOLTIP
+// This guarantees beautiful, readable hover states in both Light & Dark mode
+// ============================================================================
+const ChartTooltip = ({ active, payload, label, formatter }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-xl">
+        {label && (
+          <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+            {label}
+          </p>
+        )}
+        {payload.map((entry: any, index: number) => (
+          <div key={index} className="flex items-center gap-2 mt-1.5">
+            <div
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: entry.color || entry.payload.fill }}
+            />
+            <span className="text-slate-900 dark:text-white font-black text-sm">
+              {formatter ? formatter(entry.value) : entry.value}
+            </span>
+            <span className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+              {entry.name}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 // --- 2. FINANCIAL TREND (AREA CHART) ---
 export function FinancialAreaChart({ data }: { data: any[] }) {
   return (
-    <div className="h-[300px] w-full">
+    // THE FIX: Parent div dictates the text color using pure Tailwind classes!
+    <div className="h-[300px] w-full text-slate-500 dark:text-slate-400">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
@@ -158,38 +192,23 @@ export function FinancialAreaChart({ data }: { data: any[] }) {
           <CartesianGrid
             vertical={false}
             strokeDasharray="3 3"
-            stroke="hsl(var(--border))"
-            opacity={0.5}
+            stroke="currentColor"
+            className="opacity-20"
           />
           <XAxis
             dataKey="month"
             tickLine={false}
             axisLine={false}
-            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+            tick={{ fontSize: 11, fill: "currentColor" }} // <--- Uses parent class color
             dy={10}
           />
           <YAxis
             tickLine={false}
             axisLine={false}
             tickFormatter={(val) => formatCompactPeso(val)}
-            tick={{
-              fontSize: 11,
-              fill: "hsl(var(--muted-foreground))",
-            }}
+            tick={{ fontSize: 11, fill: "currentColor" }} // <--- Uses parent class color
           />
-          <Tooltip
-            contentStyle={{
-              borderRadius: "16px",
-              border: "1px solid hsl(var(--border))",
-              backgroundColor: "hsl(var(--card))",
-              color: "hsl(var(--foreground))",
-              boxShadow: "0 4px 20px -2px rgba(0, 0, 0, 0.1)",
-            }}
-            formatter={(value: number, name: string) => [
-              formatCompactPeso(value),
-              name.charAt(0).toUpperCase() + name.slice(1),
-            ]}
-          />
+          <Tooltip content={<ChartTooltip formatter={formatCompactPeso} />} />
           <Area
             type="monotone"
             dataKey="sales"
@@ -245,16 +264,7 @@ export function ExpenseDonutChart({ data }: { data: any[] }) {
               />
             ))}
           </Pie>
-          <Tooltip
-            formatter={(value: number) => formatCompactPeso(value)}
-            contentStyle={{
-              borderRadius: "12px",
-              border: "1px solid hsl(var(--border))",
-              backgroundColor: "hsl(var(--card))",
-              color: "hsl(var(--foreground))",
-              boxShadow: "0 4px 20px -2px rgba(0, 0, 0, 0.1)",
-            }}
-          />
+          <Tooltip content={<ChartTooltip formatter={formatCompactPeso} />} />
         </PieChart>
       </ResponsiveContainer>
     </div>
@@ -264,9 +274,8 @@ export function ExpenseDonutChart({ data }: { data: any[] }) {
 // --- 4. USERS BY ROLE (BAR CHART) ---
 export function UserRoleChart({ data }: { data: any[] }) {
   return (
-    <div className="h-[120px] w-full mt-2">
+    <div className="h-[120px] w-full mt-2 text-slate-500 dark:text-slate-400">
       <ResponsiveContainer width="100%" height="100%">
-        {/* THE FIX: Changed left margin from -20 to 0 so words don't cut off */}
         <BarChart
           data={data}
           layout="vertical"
@@ -275,8 +284,8 @@ export function UserRoleChart({ data }: { data: any[] }) {
           <CartesianGrid
             horizontal={false}
             strokeDasharray="3 3"
-            stroke="hsl(var(--border))"
-            opacity={0.5}
+            stroke="currentColor"
+            className="opacity-20"
           />
           <XAxis type="number" hide />
           <YAxis
@@ -284,24 +293,13 @@ export function UserRoleChart({ data }: { data: any[] }) {
             type="category"
             tickLine={false}
             axisLine={false}
-            width={55} // THE FIX: Gave the Y-Axis an explicit width so "OWNER" fits
-            tick={{
-              fontSize: 10,
-              fill: "hsl(var(--muted-foreground))",
-              fontWeight: "bold",
-            }}
+            width={55}
+            tick={{ fontSize: 10, fill: "currentColor", fontWeight: "bold" }} // <--- Uses parent class color
             tickFormatter={(value) => String(value).toUpperCase()}
           />
           <Tooltip
-            cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
-            contentStyle={{
-              borderRadius: "12px",
-              border: "1px solid hsl(var(--border))",
-              backgroundColor: "hsl(var(--card))",
-              color: "hsl(var(--foreground))",
-              padding: "8px 12px",
-            }}
-            formatter={(value: number) => [value, "Users"]}
+            cursor={{ fill: "currentColor", opacity: 0.05 }}
+            content={<ChartTooltip formatter={(val: number) => val} />}
           />
           <Bar
             dataKey="count"

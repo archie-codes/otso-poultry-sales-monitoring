@@ -69,7 +69,6 @@ import {
   deleteFeedTransfer,
 } from "./actions";
 
-// ---> FORMATTERS <---
 const formatSacks = (val: number | string | null | undefined) => {
   const num = Number(val);
   if (!num || num === 0) return "0";
@@ -101,7 +100,6 @@ export default function InventoryTableClient({
   const itemsPerPage = 10;
   const [activeTab, setActiveTab] = useState("deliveries");
 
-  // --- DELIVERY TAB STATE ---
   const [openSupplier, setOpenSupplier] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState("all");
   const [deliverySearch, setDeliverySearch] = useState("");
@@ -109,7 +107,6 @@ export default function InventoryTableClient({
   const [deliveryDate, setDeliveryDate] = useState<Date | undefined>(undefined);
   const [openDeliveryDate, setOpenDeliveryDate] = useState(false);
 
-  // --- MODAL STATES ---
   const [editingDelivery, setEditingDelivery] = useState<any | null>(null);
   const [deletingDelivery, setDeletingDelivery] = useState<any | null>(null);
   const [deletingTransfer, setDeletingTransfer] = useState<any | null>(null);
@@ -142,7 +139,6 @@ export default function InventoryTableClient({
     (deliveryPage - 1) * itemsPerPage + itemsPerPage,
   );
 
-  // --- TRANSFER TAB STATE ---
   const [transferSearch, setTransferSearch] = useState("");
   const [transferPage, setTransferPage] = useState(1);
   const [transferDate, setTransferDate] = useState<Date | undefined>(undefined);
@@ -168,12 +164,10 @@ export default function InventoryTableClient({
     (transferPage - 1) * itemsPerPage + itemsPerPage,
   );
 
-  // --- MATH TOTALS ---
   const grandTotalQuantity = filteredDeliveries.reduce(
     (sum, r) => sum + Number(r.quantity),
     0,
   );
-  // ---> NEW: Compute the Total Remaining <---
   const grandTotalRemaining = filteredDeliveries.reduce(
     (sum, r) => sum + Number(r.remainingQuantity),
     0,
@@ -193,9 +187,6 @@ export default function InventoryTableClient({
     0,
   );
 
-  // =========================================================================
-  // ACTIONS LOGIC (Delete & Edit)
-  // =========================================================================
   const handleDeleteDelivery = async () => {
     if (!deletingDelivery) return;
     setIsProcessing(true);
@@ -238,15 +229,11 @@ export default function InventoryTableClient({
     setIsProcessing(false);
   };
 
-  // =========================================================================
-  // EXPORTS
-  // =========================================================================
   const handlePrint = () => window.print();
 
   const downloadCSV = (type: "deliveries" | "transfers") => {
     let csv = "";
     if (type === "deliveries") {
-      // ---> NEW: Added Remaining Qty to CSV Header <---
       csv =
         "Date,Supplier,Feed Type,Initial Qty,Remaining Qty,Unit Price,Cash Bond,Total Bond,Total Payment,Actual Receipt\n";
       filteredDeliveries.forEach((r) => {
@@ -301,16 +288,17 @@ export default function InventoryTableClient({
         14,
         38,
       );
-      // ---> NEW: Added "Rem" (Remaining) to PDF Header <---
       const tableColumn = [
         "Date",
         "Supplier",
         "Description",
         "Qty",
         "Rem",
+        "Unit Px",
+        "Cash Bond",
         "Total Bond",
-        "Total Payment",
-        "Actual Receipt",
+        "Total Pay",
+        "Receipt",
       ];
       const tableRows: any[] = [];
       filteredDeliveries.forEach((r) => {
@@ -325,6 +313,8 @@ export default function InventoryTableClient({
           r.feedType,
           formatSacks(qty),
           formatSacks(rem),
+          formatMoneyPDF(r.unitPrice),
+          formatMoneyPDF(r.cashBond),
           formatMoneyPDF(bond),
           formatMoneyPDF(payment),
           formatMoneyPDF(total),
@@ -341,6 +331,8 @@ export default function InventoryTableClient({
             "",
             formatSacks(grandTotalQuantity),
             formatSacks(grandTotalRemaining),
+            "",
+            "",
             formatMoneyPDF(grandTotalCashBond),
             formatMoneyPDF(grandTotalPayment),
             formatMoneyPDF(grandTotalReceipt),
@@ -353,7 +345,7 @@ export default function InventoryTableClient({
           textColor: [15, 23, 42],
           fontStyle: "bold",
         },
-        styles: { fontSize: 8 },
+        styles: { fontSize: 7 },
       });
     } else {
       const tableColumn = [
@@ -402,7 +394,6 @@ export default function InventoryTableClient({
   return (
     <div className="flex flex-col space-y-8 relative">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        {/* TABS NAVIGATION */}
         <div className="px-5 sm:px-6">
           <TabsList className="h-12 bg-slate-200/50 dark:bg-slate-800/50 rounded-lg p-1 flex max-w-md">
             <TabsTrigger
@@ -421,17 +412,12 @@ export default function InventoryTableClient({
           </TabsList>
         </div>
 
-        {/* ========================================================= */}
-        {/* TAB 1: SUPPLIER DELIVERIES (INBOUND)                      */}
-        {/* ========================================================= */}
         <TabsContent
           value="deliveries"
           className="mt-4 px-5 sm:px-6 animate-in fade-in zoom-in-95 duration-300"
         >
           <div className="space-y-6 print:hidden">
-            {/* HEADER AREA WITH FILTERS & ACTIONS */}
             <div className="flex flex-col bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-border/50 gap-4">
-              {/* TOP ROW: Title & 3-Dot Button */}
               <div className="flex items-start justify-between gap-4 w-full">
                 <div className="flex flex-col min-w-0 pr-4">
                   <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-foreground truncate max-w-[200px] sm:max-w-sm md:max-w-xl lg:max-w-2xl">
@@ -444,7 +430,6 @@ export default function InventoryTableClient({
                   </p>
                 </div>
 
-                {/* Export Actions (Top Right) */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -477,10 +462,8 @@ export default function InventoryTableClient({
                 </DropdownMenu>
               </div>
 
-              {/* Divider Line */}
               <div className="border-t border-border/50 w-full" />
 
-              {/* BOTTOM ROW: Filters */}
               <div className="flex flex-wrap items-center gap-3 w-full">
                 <div className="hidden md:flex items-center gap-1.5 text-muted-foreground mr-1 px-2">
                   <ListFilter className="w-4 h-4" />
@@ -489,7 +472,6 @@ export default function InventoryTableClient({
                   </span>
                 </div>
 
-                {/* DATE FILTER */}
                 <Popover
                   open={openDeliveryDate}
                   onOpenChange={setOpenDeliveryDate}
@@ -540,7 +522,6 @@ export default function InventoryTableClient({
                   </PopoverContent>
                 </Popover>
 
-                {/* SUPPLIER COMBOBOX */}
                 <Popover open={openSupplier} onOpenChange={setOpenSupplier}>
                   <PopoverTrigger asChild>
                     <Button
@@ -617,10 +598,9 @@ export default function InventoryTableClient({
               </div>
             </div>
 
-            {/* EXECUTIVE SUMMARY CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-amber-50/50 border border-amber-200 p-4 rounded-2xl flex items-center gap-4 transition-all">
-                <div className="p-3 bg-amber-100 text-amber-600 rounded-xl">
+              <div className="bg-amber-50/50 dark:bg-slate-950 border border-amber-200 dark:border-slate-800 p-4 rounded-2xl flex items-center gap-4 transition-all">
+                <div className="p-3 bg-amber-100 text-amber-600  rounded-xl">
                   <Coins className="w-5 h-5" />
                 </div>
                 <div>
@@ -632,12 +612,12 @@ export default function InventoryTableClient({
                   </p>
                 </div>
               </div>
-              <div className="bg-emerald-50/50 border border-emerald-200 p-4 rounded-2xl flex items-center gap-4 transition-all">
+              <div className="bg-emerald-50/50 dark:bg-slate-950 border border-emerald-200 dark:border-slate-800 p-4 rounded-2xl flex items-center gap-4 transition-all">
                 <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
                   <Wallet className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80 ">
                     Total Payment
                   </p>
                   <p className="text-lg font-black text-emerald-700">
@@ -645,8 +625,8 @@ export default function InventoryTableClient({
                   </p>
                 </div>
               </div>
-              <div className="bg-slate-100 border border-border/50 p-4 rounded-2xl flex items-center gap-4 shadow-sm transition-all">
-                <div className="p-3 bg-white border border-border/50 rounded-xl shadow-sm">
+              <div className="bg-slate-100 dark:bg-slate-950 border border-border/50 p-4 rounded-2xl flex items-center gap-4 shadow-sm transition-all">
+                <div className="p-3 bg-white dark:bg-slate-500 border border-border/50 rounded-xl shadow-sm">
                   <Receipt className="w-5 h-5" />
                 </div>
                 <div>
@@ -660,7 +640,6 @@ export default function InventoryTableClient({
               </div>
             </div>
 
-            {/* SEARCH BAR */}
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -674,7 +653,6 @@ export default function InventoryTableClient({
               />
             </div>
 
-            {/* TABLE CONTAINER */}
             <div className="rounded-3xl border border-border/50 overflow-hidden bg-white dark:bg-slate-950 shadow-sm relative">
               <div className="overflow-auto max-h-[500px] custom-scrollbar">
                 <table className="w-full text-left text-sm whitespace-nowrap">
@@ -694,12 +672,14 @@ export default function InventoryTableClient({
                       <th className="px-5 py-4 text-[10px] font-black uppercase text-blue-600 text-right">
                         Qty
                       </th>
-                      {/* ---> NEW: Remaining Quantity Column Header <--- */}
                       <th className="px-5 py-4 text-[10px] font-black uppercase text-emerald-600 text-right">
                         Remaining
                       </th>
                       <th className="px-5 py-4 text-[10px] font-black uppercase text-muted-foreground text-right">
                         Unit Price
+                      </th>
+                      <th className="px-5 py-4 text-[10px] font-black uppercase text-muted-foreground text-right">
+                        Cash Bond
                       </th>
                       <th className="px-5 py-4 text-[10px] font-black uppercase text-amber-600 text-right">
                         Total Bond
@@ -719,7 +699,7 @@ export default function InventoryTableClient({
                     {paginatedDeliveries.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={10}
+                          colSpan={11}
                           className="px-6 py-12 text-center text-muted-foreground font-black uppercase tracking-widest opacity-40"
                         >
                           No deliveries found.
@@ -752,12 +732,14 @@ export default function InventoryTableClient({
                             <td className="px-5 py-4 font-black text-blue-600 text-right">
                               {formatSacks(r.quantity)}
                             </td>
-                            {/* ---> NEW: Remaining Quantity Table Data <--- */}
                             <td className="px-5 py-4 font-black text-emerald-600 text-right bg-emerald-50/30 dark:bg-emerald-900/10">
                               {formatSacks(r.remainingQuantity)}
                             </td>
                             <td className="px-5 py-4 font-bold text-muted-foreground text-right">
                               {formatMoney(r.unitPrice)}
+                            </td>
+                            <td className="px-5 py-4 font-bold text-muted-foreground text-right">
+                              {formatMoney(r.cashBond)}
                             </td>
                             <td className="px-5 py-4 font-black text-amber-600 text-right">
                               {formatMoney(rowTotalBond)}
@@ -768,8 +750,6 @@ export default function InventoryTableClient({
                             <td className="px-5 py-4 font-black text-foreground text-right">
                               {formatMoney(rowTotalBond + rowTotalPayment)}
                             </td>
-
-                            {/* ROW ACTIONS */}
                             <td className="px-5 py-4 text-right bg-slate-50/50 dark:bg-slate-900/20">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -819,11 +799,11 @@ export default function InventoryTableClient({
                       <td className="px-5 py-4 font-black text-blue-700 dark:text-blue-400 text-right bg-blue-100/50 dark:bg-blue-900/30">
                         {formatSacks(grandTotalQuantity)}
                       </td>
-                      {/* ---> NEW: Total Remaining Footer <--- */}
                       <td className="px-5 py-4 font-black text-emerald-700 dark:text-emerald-500 text-right bg-emerald-100/50 dark:bg-emerald-900/30">
                         {formatSacks(grandTotalRemaining)}
                       </td>
-                      <td></td>
+                      <td />
+                      <td />
                       <td className="px-5 py-4 font-black text-amber-700 dark:text-amber-500 text-right bg-amber-100/50 dark:bg-amber-900/30">
                         {formatMoney(grandTotalCashBond)}
                       </td>
@@ -833,14 +813,13 @@ export default function InventoryTableClient({
                       <td className="px-5 py-4 font-black text-foreground text-right bg-slate-200 dark:bg-slate-800">
                         {formatMoney(grandTotalReceipt)}
                       </td>
-                      <td></td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>
               </div>
             </div>
 
-            {/* PAGINATION */}
             {totalDeliveryPages > 1 && (
               <div className="flex items-center justify-between pt-2">
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
@@ -883,7 +862,6 @@ export default function InventoryTableClient({
           className="mt-4 px-5 sm:px-6 animate-in fade-in zoom-in-95 duration-300"
         >
           <div className="space-y-6 print:hidden">
-            {/* HEADER AREA WITH EXPORT AND DATE */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-border/50 gap-4">
               <div className="space-y-1">
                 <h3 className="text-xl font-black uppercase tracking-tight text-foreground">
@@ -895,7 +873,6 @@ export default function InventoryTableClient({
               </div>
 
               <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                {/* DATE FILTER */}
                 <Popover
                   open={openTransferDate}
                   onOpenChange={setOpenTransferDate}
@@ -978,7 +955,6 @@ export default function InventoryTableClient({
               </div>
             </div>
 
-            {/* EXECUTIVE SUMMARY */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-blue-50/50 border border-blue-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                 <div>
@@ -1009,7 +985,6 @@ export default function InventoryTableClient({
               </div>
             </div>
 
-            {/* SEARCH BAR */}
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -1023,7 +998,6 @@ export default function InventoryTableClient({
               />
             </div>
 
-            {/* TABLE CONTAINER */}
             <div className="rounded-3xl border border-border/50 overflow-hidden bg-white dark:bg-slate-950 shadow-sm relative">
               <div className="overflow-auto max-h-[500px] custom-scrollbar">
                 <table className="w-full text-left text-sm whitespace-nowrap">
@@ -1090,8 +1064,6 @@ export default function InventoryTableClient({
                           <td className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                             {t.staffName || "System Admin"}
                           </td>
-
-                          {/* ROW ACTIONS */}
                           <td className="px-6 py-4 text-right">
                             <Button
                               variant="ghost"
@@ -1110,7 +1082,6 @@ export default function InventoryTableClient({
               </div>
             </div>
 
-            {/* PAGINATION */}
             {totalTransferPages > 1 && (
               <div className="flex items-center justify-between pt-2">
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
@@ -1145,10 +1116,6 @@ export default function InventoryTableClient({
           </div>
         </TabsContent>
       </Tabs>
-
-      {/* ========================================================================================= */}
-      {/* 🛠️ MODALS (EDIT & DELETE)                                                                   */}
-      {/* ========================================================================================= */}
 
       {/* 1. DELETE DELIVERY MODAL */}
       <Dialog
