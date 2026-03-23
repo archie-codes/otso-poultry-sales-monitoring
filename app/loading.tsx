@@ -31,7 +31,7 @@ export default function Loading() {
               alt="Otso Poultry Mascot"
               width={70}
               height={70}
-              className="drop-shadow-xl"
+              className="drop-shadow-xl dark:invert"
               priority
             />
           </div>

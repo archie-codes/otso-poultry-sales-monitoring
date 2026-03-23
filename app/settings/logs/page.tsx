@@ -44,9 +44,9 @@ export default async function SystemLogsPage(props: {
     .offset(offset);
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto pb-12 px-4 sm:px-6 lg:px-8 py-8">
+    <div className="space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto pb-12">
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 bg-card border border-border/50 p-6 lg:p-8 rounded-3xl shadow-sm relative overflow-hidden">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 bg-card border border-border/50 p-6 lg:p-8 rounded-lg shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
         <div>
           <h1 className="text-3xl sm:text-3xl font-bold tracking-tight flex items-center gap-3 text-foreground">

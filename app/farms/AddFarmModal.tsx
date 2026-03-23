@@ -172,7 +172,7 @@ export default function AddFarmModal() {
     <>
       <Button
         onClick={() => setIsOpen(true)}
-        className="h-11 px-6 rounded-xl font-bold shadow-sm"
+        className="h-11 px-6 rounded-xl font-bold text-white shadow-sm bg-blue-600 hover:bg-blue-700"
       >
         <Tractor className="w-5 h-5 mr-2" /> Add New Farm
       </Button>

@@ -26,9 +26,9 @@ export default async function SettingsPage() {
     .orderBy(desc(users.id));
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto pb-12 px-4 sm:px-6 lg:px-8 py-8">
+    <div className="space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto pb-12">
       {/* Header & Modal Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-background/50 backdrop-blur-xl p-6 rounded-2xl border border-border/50 shadow-sm relative overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-background/50 backdrop-blur-xl p-6 rounded-lg border border-border/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">User Management</h1>

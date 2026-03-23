@@ -9,7 +9,7 @@ import {
   farms,
   users,
   feedAllocations,
-  feedDeliveries, // <--- Added this to get the price safely!
+  feedDeliveries,
 } from "../../../src/db/schema";
 import { desc, eq, and, sql } from "drizzle-orm";
 import MonitoringTableClient from "./MonitoringTableClient";
@@ -19,6 +19,7 @@ export default async function DailyMonitoringPage(props: {
   searchParams: Promise<{
     farm?: string;
     building?: string;
+    load?: string;
     date?: string;
     page?: string;
   }>;
@@ -31,6 +32,7 @@ export default async function DailyMonitoringPage(props: {
 
   const selectedFarm = searchParams?.farm;
   const selectedBuilding = searchParams?.building;
+  const selectedLoad = searchParams?.load;
   const selectedDate = searchParams?.date;
   const currentPage = Number(searchParams?.page) || 1;
   const ITEMS_PER_PAGE = 10;
@@ -49,13 +51,12 @@ export default async function DailyMonitoringPage(props: {
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
     .innerJoin(farms, eq(buildings.farmId, farms.id));
 
-  // ---> NEW: Fetch building inventory AND JOIN with deliveries to get the exact price!
   const allBuildingFeeds = await db
     .select({
       loadId: feedAllocations.loadId,
       feedType: feedAllocations.feedType,
       remainingInBuilding: feedAllocations.remainingInBuilding,
-      unitPrice: feedDeliveries.unitPrice, // Grab the price!
+      unitPrice: feedDeliveries.unitPrice,
     })
     .from(feedAllocations)
     .leftJoin(
@@ -71,7 +72,6 @@ export default async function DailyMonitoringPage(props: {
           const type = fa.feedType;
           if (type) {
             if (!acc[type]) {
-              // Now we pass BOTH qty and price to the Modal!
               acc[type] = { qty: 0, price: Number(fa.unitPrice) || 0 };
             }
             acc[type].qty += Number(fa.remainingInBuilding);
@@ -88,8 +88,15 @@ export default async function DailyMonitoringPage(props: {
 
   // 2. FILTERS
   const infrastructure = await db
-    .select({ farmName: farms.name, buildingName: buildings.name })
-    .from(buildings)
+    .select({
+      farmName: farms.name,
+      buildingName: buildings.name,
+      loadId: loads.id,
+      loadName: loads.name, // <--- THE FIX: Grab the actual Batch Name!
+    })
+    .from(dailyRecords)
+    .innerJoin(loads, eq(dailyRecords.loadId, loads.id))
+    .innerJoin(buildings, eq(loads.buildingId, buildings.id))
     .innerJoin(farms, eq(buildings.farmId, farms.id));
 
   const uniqueFarmNames = Array.from(
@@ -107,11 +114,36 @@ export default async function DailyMonitoringPage(props: {
         )
       : [];
 
+  // THE FIX: Format Available Loads as { id, name } pairs!
+  const filteredInfra = infrastructure.filter((i) => {
+    if (selectedFarm && selectedFarm !== "all" && i.farmName !== selectedFarm)
+      return false;
+    if (
+      selectedBuilding &&
+      selectedBuilding !== "all" &&
+      i.buildingName !== selectedBuilding
+    )
+      return false;
+    return true;
+  });
+
+  const loadMap = new Map<number, string>();
+  filteredInfra.forEach((i) =>
+    loadMap.set(i.loadId, i.loadName || `Load ${i.loadId}`),
+  );
+
+  const availableLoads = Array.from(loadMap.entries())
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => b.id - a.id); // Sort newest loads first
+
+  // 3. BUILD DATABASE QUERY CONDITIONS
   const filterConditions = [];
   if (selectedFarm && selectedFarm !== "all")
     filterConditions.push(eq(farms.name, selectedFarm));
   if (selectedBuilding && selectedBuilding !== "all")
     filterConditions.push(eq(buildings.name, selectedBuilding));
+  if (selectedLoad && selectedLoad !== "all")
+    filterConditions.push(eq(loads.id, Number(selectedLoad)));
   if (selectedDate && selectedDate !== "all")
     filterConditions.push(eq(dailyRecords.recordDate, selectedDate));
 
@@ -129,21 +161,19 @@ export default async function DailyMonitoringPage(props: {
   const totalItems = Number(countQuery[0].count);
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
-  // 3. FETCH HISTORY
+  // 4. FETCH HISTORY
   const history = await db
     .select({
       id: dailyRecords.id,
       loadId: dailyRecords.loadId,
+      loadName: loads.name, // <--- THE FIX: Grab the Batch Name for the Table Rows!
       date: dailyRecords.recordDate,
       mortalityAm: dailyRecords.mortalityAm,
       mortalityPm: dailyRecords.mortalityPm,
       mortality: dailyRecords.mortality,
-
-      // THESE NAMES MUST MATCH THE TABLE CLIENT
       feedsAm: dailyRecords.feedsConsumedAm,
       feedsPm: dailyRecords.feedsConsumedPm,
       feeds: dailyRecords.feedsConsumed,
-
       feedType: dailyRecords.feedType,
       remarks: dailyRecords.remarks,
       staffName: users.name,
@@ -182,6 +212,7 @@ export default async function DailyMonitoringPage(props: {
         history={history}
         farms={uniqueFarmNames}
         buildings={filteredBuildings}
+        loads={availableLoads} // Passed correctly to Client!
         totalPages={totalPages}
         currentPage={currentPage}
         userRole={userRole}

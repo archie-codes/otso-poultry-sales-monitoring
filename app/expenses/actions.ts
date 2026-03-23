@@ -22,20 +22,7 @@
 //       .from(users)
 //       .where(eq(users.email, session.user.email))
 //       .limit(1);
-//     if (dbUser.length > 0) {
-//       userId = dbUser[0].id;
-//     }
-//   }
-
-//   if (!userId && session.user.name) {
-//     const dbUser = await db
-//       .select()
-//       .from(users)
-//       .where(eq(users.name, session.user.name))
-//       .limit(1);
-//     if (dbUser.length > 0) {
-//       userId = dbUser[0].id;
-//     }
+//     if (dbUser.length > 0) userId = dbUser[0].id;
 //   }
 
 //   if (!userId) {
@@ -44,10 +31,11 @@
 
 //   const farmId = Number(formData.get("farmId"));
 //   const loadIdValue = formData.get("loadId") as string;
+
+//   // THE FIX: If shared, strictly pass null so it doesn't attach to a specific building
 //   const loadId =
 //     !loadIdValue || loadIdValue === "shared" ? null : Number(loadIdValue);
 
-//   // Cast this as any to satisfy the strict schema type check during insertion
 //   const expenseType = formData.get("expenseType") as any;
 //   const amount = formData.get("amount") as string;
 //   const expenseDate = formData.get("expenseDate") as string;
@@ -64,10 +52,10 @@
 //       amount,
 //       expenseDate,
 //       recordedBy: userId,
-//       // REMOVED 'remarks' here because it is not in your schema!
 //     });
 
 //     revalidatePath("/expenses");
+//     revalidatePath("/reports/history"); // Revalidate reports so the math engine updates
 //     return { success: true };
 //   } catch (error) {
 //     console.error("Error adding expense:", error);
@@ -117,6 +105,18 @@ export async function addExpense(formData: FormData) {
   const amount = formData.get("amount") as string;
   const expenseDate = formData.get("expenseDate") as string;
 
+  // ---> THE FIX: Logic for Medical Items vs Standard Remarks <---
+  const remarksRaw = formData.get("remarks") as string;
+  const medName = formData.get("medName") as string;
+  const medQty = formData.get("medQty") as string;
+
+  let finalRemarks = remarksRaw ? remarksRaw.toUpperCase() : null;
+
+  // If they filled out medical fields, combine them beautifully!
+  if (medName && medQty) {
+    finalRemarks = `${medName.toUpperCase()} • ${medQty.toUpperCase()}`;
+  }
+
   if (!farmId || !expenseType || !amount || !expenseDate) {
     return { error: "Please fill in all required fields." };
   }
@@ -129,6 +129,7 @@ export async function addExpense(formData: FormData) {
       amount,
       expenseDate,
       recordedBy: userId,
+      remarks: finalRemarks, // Safe insertion to your existing column!
     });
 
     revalidatePath("/expenses");

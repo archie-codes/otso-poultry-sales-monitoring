@@ -47,7 +47,7 @@ export default function AddBuildingModal({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="text-sm font-semibold text-primary hover:text-primary/80 flex items-center transition-colors px-2 py-1 rounded-md hover:bg-primary/10"
+        className="text-sm font-semibold text-white hover:text-white flex items-center transition-colors px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-700"
       >
         <Plus className="w-4 h-4 mr-1" /> Add Building
       </button>

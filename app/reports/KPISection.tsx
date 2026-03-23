@@ -6,6 +6,7 @@ import {
   Activity,
   AlertTriangle,
   Warehouse,
+  PhilippinePeso,
 } from "lucide-react";
 import {
   Dialog,
@@ -82,7 +83,7 @@ export default function KPISection({
         <DialogTrigger asChild>
           <div className="cursor-pointer hover:scale-105 active:scale-95 hover:shadow-blue-500/40 transition-all duration-300 bg-blue-600 dark:bg-blue-700 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-lg shadow-blue-500/20 text-white flex flex-col justify-between">
             <div className="flex items-center gap-2 opacity-80 mb-2">
-              <DollarSign className="w-4 h-4" />
+              <PhilippinePeso className="w-4 h-4" />
               <p className="text-[9px] lg:text-[10px] xl:text-xs font-bold uppercase tracking-widest">
                 Global Capital
               </p>
@@ -95,7 +96,7 @@ export default function KPISection({
         <DialogContent className="rounded-[2rem] max-w-lg border-border/50">
           <DialogHeader className="bg-blue-50 dark:bg-blue-950/30 -mx-6 -mt-6 p-6 border-b border-blue-100 dark:border-blue-900/50 rounded-t-[2rem]">
             <DialogTitle className="text-xl font-black text-blue-700 dark:text-blue-500 flex items-center gap-2">
-              <DollarSign className="w-6 h-6" /> Deployed Capital
+              <PhilippinePeso className="w-6 h-6" /> Deployed Capital
             </DialogTitle>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto custom-scrollbar space-y-3 py-4 px-2">

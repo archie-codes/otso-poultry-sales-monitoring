@@ -25,6 +25,7 @@ import {
   MoreVertical,
   Printer,
   Download,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,9 +50,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import RecordActions from "./RecordActions";
-import Link from "next/link";
 
-// ---> FRACTION FORMATTER <---
 const formatSacks = (val: number | string | null | undefined) => {
   const num = Number(val);
   if (!num || num === 0) return "0";
@@ -70,17 +69,24 @@ const formatSacks = (val: number | string | null | undefined) => {
   return whole.toString();
 };
 
-// Safe Date Formatter to prevent crashes if date is missing
 const safeFormatDate = (dateString: string | null | undefined) => {
   if (!dateString) return "Unknown Date";
   const d = new Date(dateString);
   return isValid(d) ? format(d, "MMM d, yyyy") : "Invalid Date";
 };
 
+const formatMoney = (amount: number) => {
+  return amount.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
 export default function MonitoringTableClient({
   history = [],
   farms = [],
   buildings = [],
+  loads = [],
   totalPages = 1,
   currentPage = 1,
   userRole = "staff",
@@ -88,6 +94,7 @@ export default function MonitoringTableClient({
   history?: any[];
   farms?: string[];
   buildings?: string[];
+  loads?: { id: number; name: string }[];
   totalPages?: number;
   currentPage?: number;
   userRole?: string;
@@ -98,6 +105,7 @@ export default function MonitoringTableClient({
 
   const selectedFarm = searchParams.get("farm") || "all";
   const selectedBuilding = searchParams.get("building") || "all";
+  const selectedLoad = searchParams.get("load") || "all";
   const selectedDateParam = searchParams.get("date");
 
   let selectedDate: Date | undefined = undefined;
@@ -126,20 +134,39 @@ export default function MonitoringTableClient({
 
   const [openFarm, setOpenFarm] = useState(false);
   const [openBuilding, setOpenBuilding] = useState(false);
+  const [openLoad, setOpenLoad] = useState(false);
   const [openDate, setOpenDate] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const hasActiveFilters =
-    selectedFarm !== "all" || selectedBuilding !== "all" || !!selectedDate;
+    selectedFarm !== "all" ||
+    selectedBuilding !== "all" ||
+    selectedLoad !== "all" ||
+    !!selectedDate;
 
-  const updateFilter = (type: "farm" | "building" | "date", value: string) => {
+  const updateFilter = (
+    type: "farm" | "building" | "load" | "date",
+    value: string,
+  ) => {
     const params = new URLSearchParams(searchParams.toString());
     if (value === "all" || value === "") {
       params.delete(type);
-      if (type === "farm") params.delete("building");
+      if (type === "farm") {
+        params.delete("building");
+        params.delete("load");
+      }
+      if (type === "building") {
+        params.delete("load");
+      }
     } else {
       params.set(type, value);
-      if (type === "farm") params.delete("building");
+      if (type === "farm") {
+        params.delete("building");
+        params.delete("load");
+      }
+      if (type === "building") {
+        params.delete("load");
+      }
     }
     params.set("page", "1");
 
@@ -168,15 +195,21 @@ export default function MonitoringTableClient({
     return true;
   });
 
+  const selectedLoadObject = loads.find((l) => String(l.id) === selectedLoad);
+  const displayLoadName = selectedLoadObject
+    ? selectedLoadObject.name
+    : "ALL BATCHES";
+
   // =========================================================================
   // EXPORT LOGIC
   // =========================================================================
   const downloadCSV = () => {
     let csv =
-      "Date,Farm,Building,Load ID,Mortality AM,Mortality PM,Total Mortality,Feeds AM (Sacks),Feeds PM (Sacks),Total Feeds (Sacks),Feed Type,Recorded By\n";
+      "Date,Farm,Building,Batch Name,Mortality AM,Mortality PM,Total Mortality,Feeds AM (Sacks),Feeds PM (Sacks),Total Feeds (Sacks),Feed Type,Recorded By\n";
     filteredHistory.forEach((r) => {
       const cleanDate = format(new Date(r.date), "MM/dd/yyyy");
-      csv += `"${cleanDate}","${r.farmName}","${r.buildingName}","Load ${r.loadId}",${Number(r.mortalityAm) || 0},${Number(r.mortalityPm) || 0},${Number(r.mortality) || 0},"${formatSacks(r.feedsAm)}","${formatSacks(r.feedsPm)}","${formatSacks(r.feeds)}","${r.feedType || "N/A"}","${r.staffName || "System Admin"}"\n`;
+      const loadStr = r.loadName || `Load ${r.loadId}`;
+      csv += `"${cleanDate}","${r.farmName}","${r.buildingName}","${loadStr}",${Number(r.mortalityAm) || 0},${Number(r.mortalityPm) || 0},${Number(r.mortality) || 0},"${formatSacks(r.feedsAm)}","${formatSacks(r.feedsPm)}","${formatSacks(r.feeds)}","${r.feedType || "N/A"}","${r.staffName || "System Admin"}"\n`;
     });
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -204,7 +237,6 @@ export default function MonitoringTableClient({
     doc.text("Official Daily Monitoring Logs", 14, 26);
     doc.text(`Print Date: ${format(new Date(), "MMMM d, yyyy")}`, 14, 32);
 
-    // Add current filters to PDF header
     let filterText = "Filters Applied: ";
     filterText +=
       selectedFarm !== "all" ? `Farm: ${selectedFarm} | ` : "Farm: All | ";
@@ -212,6 +244,8 @@ export default function MonitoringTableClient({
       selectedBuilding !== "all"
         ? `Building: ${selectedBuilding} | `
         : "Building: All | ";
+    filterText +=
+      selectedLoad !== "all" ? `Batch: ${displayLoadName} | ` : "Batch: All | ";
     filterText += selectedDate
       ? `Date: ${format(selectedDate, "MMM d, yyyy")}`
       : "Date: All";
@@ -219,7 +253,7 @@ export default function MonitoringTableClient({
 
     const tableColumn = [
       "Date",
-      "Location",
+      "Location & Batch",
       "Total Mortality",
       "Total Feeds",
       "Feed Type",
@@ -234,9 +268,11 @@ export default function MonitoringTableClient({
       totalMortalitySum += Number(r.mortality) || 0;
       totalFeedsSum += Number(r.feeds) || 0;
 
+      const loadStr = r.loadName || `Load ${r.loadId}`;
+
       tableRows.push([
         format(new Date(r.date), "MMM d, yyyy"),
-        `${r.farmName} - ${r.buildingName} (Load ${r.loadId})`,
+        `${r.farmName} - ${r.buildingName} (${loadStr})`,
         Number(r.mortality) || 0,
         formatSacks(r.feeds),
         r.feedType || "-",
@@ -259,25 +295,20 @@ export default function MonitoringTableClient({
         ],
       ],
       theme: "grid",
-      headStyles: { fillColor: [15, 23, 42] }, // Slate 900
+      headStyles: { fillColor: [15, 23, 42] },
       footStyles: {
         fillColor: [241, 245, 249],
         textColor: [15, 23, 42],
         fontStyle: "bold",
-      }, // Slate 100
+      },
       styles: { fontSize: 9 },
     });
 
     doc.save(`Otso_Daily_Monitoring_${format(new Date(), "yyyy-MM-dd")}.pdf`);
   };
 
-  function formatMoney(arg0: number): import("react").ReactNode {
-    throw new Error("Function not implemented.");
-  }
-
   return (
     <div className="bg-card border border-border/50 rounded-lg overflow-hidden shadow-sm flex flex-col relative">
-      {/* 1. BULLETPROOF HEADER - TWO ROWS */}
       <div className="px-5 py-4 border-b border-border/50 bg-slate-50/50 dark:bg-slate-900/20 flex flex-col gap-4">
         {/* ROW 1: Title, Tabs & Export */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full">
@@ -321,7 +352,6 @@ export default function MonitoringTableClient({
               </TabsList>
             </Tabs>
 
-            {/* ---> NEW EXPORT ACTIONS MENU <--- */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -364,8 +394,7 @@ export default function MonitoringTableClient({
             </span>
           </div>
 
-          {/* DATE FILTER */}
-          <div className="flex-1 min-w-[120px] max-w-[180px] bg-white dark:bg-slate-950 rounded-xl border border-border transition-all">
+          <div className="flex-1 min-w-[110px] max-w-[160px] bg-white dark:bg-slate-950 rounded-xl border border-border transition-all">
             <Popover open={openDate} onOpenChange={setOpenDate}>
               <PopoverTrigger asChild>
                 <Button
@@ -403,8 +432,7 @@ export default function MonitoringTableClient({
             </Popover>
           </div>
 
-          {/* FARM FILTER */}
-          <div className="flex-1 min-w-[120px] max-w-[180px] bg-white dark:bg-slate-950 rounded-xl border border-border transition-all">
+          <div className="flex-1 min-w-[110px] max-w-[160px] bg-white dark:bg-slate-950 rounded-xl border border-border transition-all">
             <Popover open={openFarm} onOpenChange={setOpenFarm}>
               <PopoverTrigger asChild>
                 <Button
@@ -472,8 +500,7 @@ export default function MonitoringTableClient({
             </Popover>
           </div>
 
-          {/* BUILDING FILTER */}
-          <div className="flex-1 min-w-[120px] max-w-[180px] bg-white dark:bg-slate-950 rounded-xl border border-border transition-all">
+          <div className="flex-1 min-w-[110px] max-w-[160px] bg-white dark:bg-slate-950 rounded-xl border border-border transition-all">
             <Popover open={openBuilding} onOpenChange={setOpenBuilding}>
               <PopoverTrigger asChild>
                 <Button
@@ -544,13 +571,82 @@ export default function MonitoringTableClient({
             </Popover>
           </div>
 
+          <div className="flex-1 min-w-[110px] max-w-[160px] bg-white dark:bg-slate-950 rounded-xl border border-border transition-all">
+            <Popover open={openLoad} onOpenChange={setOpenLoad}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  disabled={selectedBuilding === "all" || isPending}
+                  className="w-full justify-between h-10 px-3 font-bold uppercase tracking-wider text-[10px] disabled:opacity-30"
+                >
+                  <div className="flex items-center truncate">
+                    <Layers className="w-3.5 h-3.5 mr-1.5 shrink-0 text-slate-400" />
+                    <span className="truncate">
+                      {selectedLoad === "all" ? "BATCH" : displayLoadName}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[200px] p-0 rounded-xl shadow-xl border-border">
+                <Command>
+                  <CommandInput placeholder="Search batch..." />
+                  <CommandList className="max-h-[250px]">
+                    <CommandEmpty className="py-4 text-xs text-center">
+                      No batch found.
+                    </CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        onSelect={() => {
+                          updateFilter("load", "all");
+                          setOpenLoad(false);
+                        }}
+                        className="text-xs font-bold uppercase cursor-pointer py-2.5"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-3.5 w-3.5",
+                            selectedLoad === "all"
+                              ? "opacity-100 text-emerald-600"
+                              : "opacity-0",
+                          )}
+                        />{" "}
+                        ALL BATCHES
+                      </CommandItem>
+                      {loads.map((l) => (
+                        <CommandItem
+                          key={String(l.id)}
+                          onSelect={() => {
+                            updateFilter("load", String(l.id));
+                            setOpenLoad(false);
+                          }}
+                          className="text-xs font-bold uppercase cursor-pointer py-2.5"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-3.5 w-3.5",
+                              selectedLoad === String(l.id)
+                                ? "opacity-100 text-emerald-600"
+                                : "opacity-0",
+                            )}
+                          />{" "}
+                          {l.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
           {/* CLEAR FILTERS */}
           {hasActiveFilters && (
             <Button
               variant="ghost"
               disabled={isPending}
               onClick={resetFilters}
-              className="h-10 px-4 rounded-xl text-[10px] font-black uppercase text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors ml-auto md:ml-0"
+              className="h-10 px-4 rounded-xl text-[10px] font-black uppercase text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors ml-auto lg:ml-0"
             >
               <X className="w-3.5 h-3.5 mr-1" /> Reset
             </Button>
@@ -572,10 +668,9 @@ export default function MonitoringTableClient({
                 Date
               </th>
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground whitespace-nowrap">
-                Location hierarchy
+                Location & Batch
               </th>
 
-              {/* Dynamic Headers */}
               {activeTab !== "feeds" && (
                 <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-red-500 text-center whitespace-nowrap">
                   Mortality Ledger
@@ -624,7 +719,7 @@ export default function MonitoringTableClient({
                     {safeFormatDate(record.date)}
                   </td>
 
-                  {/* STACKED LOCATION */}
+                  {/* STACKED LOCATION & BATCH NAME - REMOVED LINK */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex flex-col space-y-0.5 text-left">
                       <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
@@ -633,12 +728,10 @@ export default function MonitoringTableClient({
                       <span className="text-xs font-black uppercase text-foreground">
                         {record.buildingName}
                       </span>
-                      <Link
-                        href={`/production/monitoring/${record.loadId}`}
-                        className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 hover:underline transition-colors mt-0.5 w-fit"
-                      >
-                        Load {record.loadId}
-                      </Link>
+                      {/* THE FIX: Static text instead of <Link> */}
+                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 mt-0.5 w-fit">
+                        {record.loadName || `Load ${record.loadId}`}
+                      </span>
                     </div>
                   </td>
 
@@ -724,7 +817,6 @@ export default function MonitoringTableClient({
                               </span>
                             )}
 
-                            {/* SAFELY HIDE COST IF unitPrice DOES NOT EXIST YET */}
                             {Number(record.unitPrice) > 0 && (
                               <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100/50 dark:border-emerald-900/30 px-2.5 py-0.5 rounded-md mt-0.5 shadow-sm">
                                 Cost: ₱

@@ -36,7 +36,7 @@ export default function SystemLogsClient({
   };
 
   return (
-    <div className="bg-card border border-border/50 rounded-[2rem] overflow-hidden shadow-sm flex flex-col relative">
+    <div className="bg-card border border-border/50 rounded-lg overflow-hidden shadow-sm flex flex-col relative">
       {/* TABLE */}
       <div
         className={cn(
