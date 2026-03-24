@@ -12,7 +12,6 @@ import {
 } from "../../src/db/schema";
 import { desc, eq } from "drizzle-orm";
 
-// ---> IMPORT YOUR CLIENT COMPONENTS HERE <---
 import InventoryTableClient from "./InventoryTableClient";
 import AddFeedDeliveryModal from "./AddFeedDeliveryModal";
 import TransferFeedsModal from "./TransferFeedsModal";
@@ -21,9 +20,6 @@ export default async function InventoryPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
-  // ==========================================================
-  // 1. FETCH TABLE DATA
-  // ==========================================================
   const deliveries = await db
     .select({
       id: feedDeliveries.id,
@@ -31,7 +27,7 @@ export default async function InventoryPage() {
       deliveryDate: feedDeliveries.deliveryDate,
       feedType: feedDeliveries.feedType,
       quantity: feedDeliveries.quantity,
-      remainingQuantity: feedDeliveries.remainingQuantity, // Needed for transfer validation
+      remainingQuantity: feedDeliveries.remainingQuantity,
       unitPrice: feedDeliveries.unitPrice,
       cashBond: feedDeliveries.cashBond,
     })
@@ -48,6 +44,9 @@ export default async function InventoryPage() {
       buildingName: buildings.name,
       loadId: loads.id,
       staffName: users.name,
+      // ---> NEW: Fetch the columns that tell us if it's an internal transfer <---
+      isInternalTransfer: feedAllocations.isInternalTransfer,
+      sourceBuilding: feedAllocations.sourceBuilding,
     })
     .from(feedAllocations)
     .innerJoin(loads, eq(feedAllocations.loadId, loads.id))
@@ -56,10 +55,6 @@ export default async function InventoryPage() {
     .leftJoin(users, eq(feedAllocations.recordedBy, users.id))
     .orderBy(desc(feedAllocations.allocatedDate), desc(feedAllocations.id));
 
-  // ==========================================================
-  // 2. FETCH MODAL DATA (For the Buttons)
-  // ==========================================================
-  // A. For AddFeedDeliveryModal (Autocomplete History)
   const historicalSuppliers = Array.from(
     new Set(deliveries.map((d) => d.supplierName)),
   );
@@ -67,8 +62,6 @@ export default async function InventoryPage() {
     new Set(deliveries.map((d) => d.feedType)),
   );
 
-  // B. For TransferFeedsModal (Available Stock & Active Destinations)
-  // Filter deliveries to only show batches that still have sacks remaining
   const availableDeliveries = deliveries.filter(
     (d) => Number(d.remainingQuantity) > 0,
   );
@@ -87,7 +80,6 @@ export default async function InventoryPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto pb-12">
-      {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-card border border-border/50 p-8 rounded-lg shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
         <div>
@@ -99,7 +91,6 @@ export default async function InventoryPage() {
           </p>
         </div>
 
-        {/* ---> THE BUTTONS ARE HERE! <--- */}
         <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 z-10">
           <TransferFeedsModal
             availableDeliveries={availableDeliveries}
@@ -112,7 +103,6 @@ export default async function InventoryPage() {
         </div>
       </div>
 
-      {/* TABBED TABLE SECTION */}
       <InventoryTableClient deliveries={deliveries} transfers={transfers} />
     </div>
   );

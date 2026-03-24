@@ -84,7 +84,7 @@ export default function AddBuildingModal({
                     name="name"
                     required
                     placeholder="e.g., Building A"
-                    className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+                    className="flex h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary uppercase"
                   />
                 </div>
 

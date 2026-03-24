@@ -2,17 +2,39 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "../../src";
-import { expenses, farms, loads, buildings, users } from "../../src/db/schema";
+import {
+  expenses,
+  farms,
+  loads,
+  buildings,
+  users,
+  harvestRecords,
+} from "../../src/db/schema";
 import { desc, eq, and, sql } from "drizzle-orm";
 import { TrendingDown, Wallet, PieChart, Building2 } from "lucide-react";
 import AddExpenseModal from "./AddExpenseModal";
 import ExpensesTableClient from "./ExpensesTableClient";
 
+// ---> STRICT TIMEZONE HELPERS <---
+const getMidnight = (dateInput: string | Date | null) => {
+  if (!dateInput) return 0;
+  const d = new Date(dateInput);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+
+const getEndOfDay = (dateInput: string | Date | null) => {
+  if (!dateInput) return 0;
+  const d = new Date(dateInput);
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+};
+
 export default async function ExpensesPage(props: {
   searchParams: Promise<{
     farm?: string;
     building?: string;
-    load?: string; // <--- NEW: Added load filter
+    load?: string;
     type?: string;
     date?: string;
     page?: string;
@@ -24,7 +46,7 @@ export default async function ExpensesPage(props: {
   const searchParams = await props.searchParams;
   const selectedFarm = searchParams?.farm;
   const selectedBuilding = searchParams?.building;
-  const selectedLoad = searchParams?.load; // <--- NEW
+  const selectedLoad = searchParams?.load;
   const selectedType = searchParams?.type;
   const selectedDate = searchParams?.date;
 
@@ -37,7 +59,7 @@ export default async function ExpensesPage(props: {
   const loadTimelines = await db
     .select({
       id: loads.id,
-      name: loads.name, // Grab actual name for UI
+      name: loads.name,
       farmId: farms.id,
       farmName: farms.name,
       buildingName: buildings.name,
@@ -70,8 +92,6 @@ export default async function ExpensesPage(props: {
         )
       : [];
 
-  // ---> NEW: DYNAMIC LOAD FILTER <---
-  // Only show loads that belong to the currently selected Farm/Building
   const availableLoads = Array.from(
     new Set(
       loadTimelines
@@ -96,24 +116,19 @@ export default async function ExpensesPage(props: {
     ),
   )
     .map((str) => JSON.parse(str))
-    .sort((a: any, b: any) => b.id - a.id); // Sort newest loads first
+    .sort((a: any, b: any) => b.id - a.id);
 
   const filters = [];
-  if (selectedFarm && selectedFarm !== "all") {
+  if (selectedFarm && selectedFarm !== "all")
     filters.push(eq(farms.name, selectedFarm));
-  }
-  if (selectedBuilding && selectedBuilding !== "all") {
+  if (selectedBuilding && selectedBuilding !== "all")
     filters.push(eq(buildings.name, selectedBuilding));
-  }
-  if (selectedLoad && selectedLoad !== "all") {
+  if (selectedLoad && selectedLoad !== "all")
     filters.push(eq(expenses.loadId, Number(selectedLoad)));
-  }
-  if (selectedType && selectedType !== "all") {
+  if (selectedType && selectedType !== "all")
     filters.push(eq(expenses.expenseType, selectedType as any));
-  }
-  if (selectedDate && selectedDate !== "all") {
+  if (selectedDate && selectedDate !== "all")
     filters.push(eq(expenses.expenseDate, selectedDate));
-  }
 
   const finalCondition = filters.length > 0 ? and(...filters) : undefined;
 
@@ -129,18 +144,18 @@ export default async function ExpensesPage(props: {
   const totalItems = Number(countQuery[0].count);
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
-  // THE PAGINATED DATA (For the UI Table)
-  const history = await db
+  const rawHistory = await db
     .select({
       id: expenses.id,
       date: expenses.expenseDate,
       type: expenses.expenseType,
       amount: expenses.amount,
+      farmId: expenses.farmId,
       farmName: farms.name,
       buildingName: buildings.name,
       staffName: users.name,
       loadId: expenses.loadId,
-      loadName: loads.name, // <--- THE FIX: Grab Batch Name for UI
+      loadName: loads.name,
       remarks: expenses.remarks,
     })
     .from(expenses)
@@ -153,18 +168,18 @@ export default async function ExpensesPage(props: {
     .limit(ITEMS_PER_PAGE)
     .offset(offset);
 
-  // THE UNPAGINATED DATA (For the PDF/CSV Exports)
-  const fullHistory = await db
+  const rawFullHistory = await db
     .select({
       id: expenses.id,
       date: expenses.expenseDate,
       type: expenses.expenseType,
       amount: expenses.amount,
+      farmId: expenses.farmId,
       farmName: farms.name,
       buildingName: buildings.name,
       staffName: users.name,
       loadId: expenses.loadId,
-      loadName: loads.name, // <--- THE FIX: Grab Batch Name for UI
+      loadName: loads.name,
       remarks: expenses.remarks,
     })
     .from(expenses)
@@ -175,13 +190,58 @@ export default async function ExpensesPage(props: {
     .where(finalCondition)
     .orderBy(desc(expenses.expenseDate), desc(expenses.createdAt));
 
+  const allHarvests = await db.select().from(harvestRecords);
+
+  const allLoadsWithTrueTimeline = loadTimelines.map((l) => {
+    const loadHarvests = allHarvests.filter((h) => h.loadId === l.id);
+    const trueHarvestDate =
+      loadHarvests.length > 0
+        ? loadHarvests[loadHarvests.length - 1].harvestDate
+        : l.harvestDate;
+
+    return {
+      farmId: l.farmId,
+      buildingName: l.buildingName,
+      name: l.name,
+      isActive: l.isActive,
+      startTime: getMidnight(l.loadDate),
+      endTime: l.isActive
+        ? Infinity
+        : getEndOfDay(trueHarvestDate || new Date()),
+    };
+  });
+
+  const enrichHistory = (records: any[]) =>
+    records.map((record: any) => {
+      if (record.loadId) return { ...record, sharedWith: [] };
+
+      const expenseTime = getMidnight(record.date || record.createdAt);
+
+      const activeBatches = allLoadsWithTrueTimeline.filter(
+        (t) =>
+          t.farmId === record.farmId &&
+          expenseTime >= t.startTime &&
+          expenseTime <= t.endTime,
+      );
+
+      return {
+        ...record,
+        sharedWith: activeBatches.map(
+          (b) => `${b.buildingName} (${b.name || "Unnamed"})`,
+        ),
+      };
+    });
+
+  const history = enrichHistory(rawHistory);
+  const fullHistory = enrichHistory(rawFullHistory);
+
   const totalAmount = fullHistory.reduce(
-    (sum, record) => sum + Number(record.amount),
+    (sum: number, record: any) => sum + Number(record.amount),
     0,
   );
 
   const categoryTotals = fullHistory.reduce(
-    (acc, record) => {
+    (acc: Record<string, number>, record: any) => {
       acc[record.type] = (acc[record.type] || 0) + Number(record.amount);
       return acc;
     },
@@ -190,16 +250,17 @@ export default async function ExpensesPage(props: {
 
   let topCategory = "N/A";
   let topCategoryAmount = 0;
+
   Object.entries(categoryTotals).forEach(([type, amount]) => {
-    if (amount > topCategoryAmount) {
-      topCategoryAmount = amount;
+    const val = amount as number;
+    if (val > topCategoryAmount) {
+      topCategoryAmount = val;
       topCategory = type;
     }
   });
 
   const formatMoney = (amount: number) =>
     `₱${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
   const formatMacro = (amount: number) =>
     `₱${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 
@@ -241,7 +302,6 @@ export default async function ExpensesPage(props: {
             </p>
           </div>
         </div>
-
         <div className="bg-card border border-border/50 p-6 rounded-lg shadow-sm flex items-center gap-4">
           <div className="p-4 bg-amber-50 dark:bg-amber-950/30 text-amber-500 rounded-2xl shrink-0">
             <PieChart className="w-8 h-8" />
@@ -261,7 +321,6 @@ export default async function ExpensesPage(props: {
             </p>
           </div>
         </div>
-
         <div className="bg-card border border-border/50 p-6 rounded-lg shadow-sm flex items-center gap-4">
           <div className="p-4 bg-blue-50 dark:bg-blue-950/30 text-blue-500 rounded-2xl shrink-0">
             <Building2 className="w-8 h-8" />
@@ -280,13 +339,12 @@ export default async function ExpensesPage(props: {
         </div>
       </div>
 
-      {/* INTERACTIVE TABLE & FILTERS */}
       <ExpensesTableClient
         history={history}
         fullHistory={fullHistory}
         farms={uniqueFarmsList}
         buildings={availableBuildingsForFilter}
-        loads={availableLoads} // <--- PASS DOWN LOADS
+        loads={availableLoads}
         totalPages={totalPages}
         currentPage={currentPage}
       />

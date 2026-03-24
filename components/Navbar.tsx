@@ -25,8 +25,8 @@ import {
   ChevronDown,
   Package,
   LineChart,
-  Warehouse, // <-- NEW
-  Building2, // <-- NEW
+  Warehouse,
+  Building2,
 } from "lucide-react";
 
 import {
@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/sheet";
 
 import NotificationBell from "./NotificationBell";
+import { cn } from "@/lib/utils";
 
 const HenIcon = ({ className }: { className?: string }) => {
   return (
@@ -48,7 +49,7 @@ const HenIcon = ({ className }: { className?: string }) => {
         alt="Hen"
         fill
         sizes="18px"
-        className="object-contain dark:brightness-0 dark:invert"
+        className="object-contain brightness-0 invert"
       />
     </span>
   );
@@ -202,140 +203,153 @@ export default function Navbar({
 
           <SheetContent
             side="left"
-            className="w-[280px] p-0 flex flex-col border-r border-border/40 bg-card"
+            className="w-[280px] p-0 flex flex-col border-r border-border/40 bg-linear-to-b from-green-700 via-green-800 to-green-950 text-blue-50"
           >
             <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
 
-            <div className="h-16 flex items-center px-6 border-b border-border/40">
-              <div className="relative h-8 w-8 mr-3 shrink-0 flex items-center justify-center">
+            {/* ---> BRAND HEADER (Matches Sidebar) <--- */}
+            <div className="h-16 flex items-center px-6 border-b border-white/10 shrink-0 overflow-hidden bg-black/10">
+              <div className="relative h-8 w-8 shrink-0 flex items-center justify-center mr-3">
                 <Image
                   src="/logo.png"
                   alt="Otso Poultry Logo"
                   fill
-                  className="object-contain"
+                  className="object-contain drop-shadow-md"
                   priority
                 />
               </div>
-              <span className="font-bold text-lg tracking-tight bg-linear-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              <span className="font-black text-lg tracking-tight bg-linear-to-r from-white/80 to-white/80 bg-clip-text text-transparent whitespace-nowrap">
                 Otso Poultry
               </span>
             </div>
 
-            <div className="flex-1 py-6 flex flex-col gap-6 px-4 overflow-y-auto custom-scrollbar">
+            {/* ---> NAVIGATION LINKS <--- */}
+            <div className="flex-1 py-6 flex flex-col gap-6 px-4 overflow-y-auto custom-scrollbar overflow-x-hidden">
               {navGroups.map((group) => (
-                <div key={group.label} className="flex flex-col gap-1">
-                  <h3 className="px-3 text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/70 mb-1">
+                <div key={group.label} className="flex flex-col gap-1 w-full">
+                  <h3 className="px-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500/70 mb-1 truncate transition-opacity duration-300">
                     {group.label}
                   </h3>
 
-                  {group.items.map((item) => {
-                    // IF THIS ITEM HAS SUB-ITEMS
-                    if (item.subItems) {
-                      const isMenuOpen = openMenus[item.name];
-                      const isAnySubActive = item.subItems.some(
-                        (sub) =>
-                          pathname === sub.href ||
-                          pathname.startsWith(sub.href + "/"),
-                      );
+                  <div className="px-1 flex flex-col gap-1">
+                    {group.items.map((item) => {
+                      // IF THIS ITEM HAS SUB-ITEMS
+                      if (item.subItems) {
+                        const isMenuOpen = openMenus[item.name];
+                        const isAnySubActive = item.subItems.some(
+                          (sub) =>
+                            pathname === sub.href ||
+                            pathname.startsWith(sub.href + "/"),
+                        );
+
+                        return (
+                          <div
+                            key={item.name}
+                            className="flex flex-col gap-1 mt-1 w-full"
+                          >
+                            <button
+                              onClick={() => toggleMenu(item.name)}
+                              className={cn(
+                                "flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group w-full outline-none border border-transparent",
+                                isAnySubActive
+                                  ? "bg-white/10 text-white font-bold border-white/5"
+                                  : "text-blue-100/70 hover:bg-white/5 hover:text-white font-medium",
+                              )}
+                            >
+                              <div className="flex items-center gap-3">
+                                <item.icon
+                                  className={cn(
+                                    "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
+                                    isAnySubActive ? "text-emerald-400" : "",
+                                  )}
+                                />
+                                <span className="text-sm truncate">
+                                  {item.name}
+                                </span>
+                              </div>
+                              <ChevronDown
+                                className={cn(
+                                  "h-4 w-4 transition-transform duration-200 opacity-50",
+                                  isMenuOpen
+                                    ? "rotate-180 text-emerald-400"
+                                    : "",
+                                )}
+                              />
+                            </button>
+
+                            {/* Sub Items */}
+                            {isMenuOpen && (
+                              <div className="flex flex-col gap-1 pl-4 mt-1 border-l border-white/10 ml-6 animate-in slide-in-from-top-2 fade-in duration-200">
+                                {item.subItems.map((subItem) => {
+                                  const isStrictActive =
+                                    pathname === subItem.href;
+                                  return (
+                                    <Link
+                                      key={subItem.name}
+                                      href={subItem.href}
+                                      onClick={() => setIsOpen(false)}
+                                      className={cn(
+                                        "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group",
+                                        isStrictActive
+                                          ? "bg-emerald-500/20 text-emerald-400 font-bold"
+                                          : "text-blue-100/60 hover:text-white text-sm font-medium hover:bg-white/5",
+                                      )}
+                                    >
+                                      <subItem.icon className="h-3.5 w-3.5" />
+                                      <span className="text-[13px] truncate">
+                                        {subItem.name}
+                                      </span>
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // NORMAL ITEMS
+                      const itemHref = item.href || "";
+                      const isActive =
+                        pathname === itemHref ||
+                        (pathname.startsWith(itemHref + "/") &&
+                          itemHref !== "/reports");
+                      const isStrictActive =
+                        itemHref === "/" ? pathname === "/" : isActive;
 
                       return (
-                        <div
+                        <Link
                           key={item.name}
-                          className="flex flex-col gap-1 mt-1"
-                        >
-                          <button
-                            onClick={() => toggleMenu(item.name)}
-                            className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group w-full ${
-                              isAnySubActive
-                                ? "text-slate-900 font-bold dark:text-white"
-                                : "text-muted-foreground hover:bg-slate-50 hover:text-slate-900 font-medium dark:hover:bg-slate-800/50 dark:hover:text-white"
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <item.icon className="h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110" />
-                              <span className="text-sm">{item.name}</span>
-                            </div>
-                            <ChevronDown
-                              className={`h-4 w-4 transition-transform duration-200 ${isMenuOpen ? "rotate-180" : ""}`}
-                            />
-                          </button>
-
-                          {isMenuOpen && (
-                            <div className="flex flex-col gap-1 pl-4 mt-1 border-l-2 border-border/50 ml-5 animate-in slide-in-from-top-2 fade-in duration-200">
-                              {item.subItems.map((subItem) => {
-                                const isStrictActive =
-                                  pathname === subItem.href;
-                                return (
-                                  <Link
-                                    key={subItem.name}
-                                    href={subItem.href}
-                                    onClick={() => setIsOpen(false)}
-                                    className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group ${
-                                      isStrictActive
-                                        ? "bg-slate-100 text-blue-900 font-bold dark:bg-slate-800 dark:text-white shadow-sm"
-                                        : "text-muted-foreground hover:text-slate-900 text-sm font-medium dark:hover:text-white"
-                                    }`}
-                                  >
-                                    <subItem.icon
-                                      className={`h-4 w-4 ${isStrictActive ? "text-slate-900 dark:text-white" : ""}`}
-                                    />
-                                    <span className="text-[13px]">
-                                      {subItem.name}
-                                    </span>
-                                  </Link>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-
-                    // NORMAL ITEMS
-                    const itemHref = item.href || "";
-                    const isActive =
-                      pathname === itemHref ||
-                      (pathname.startsWith(itemHref + "/") &&
-                        itemHref !== "/reports");
-                    const isStrictActive =
-                      itemHref === "/" ? pathname === "/" : isActive;
-
-                    return (
-                      <Link
-                        key={item.name}
-                        href={itemHref}
-                        onClick={() => setIsOpen(false)}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
-                          isStrictActive
-                            ? "bg-slate-100 text-slate-900 font-bold dark:bg-slate-800 dark:text-white shadow-sm"
-                            : "text-muted-foreground hover:bg-slate-50 hover:text-slate-900 font-medium dark:hover:bg-slate-800/50 dark:hover:text-white"
-                        }`}
-                      >
-                        <item.icon
-                          className={`h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110 ${
+                          href={itemHref}
+                          onClick={() => setIsOpen(false)}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative border",
                             isStrictActive
-                              ? "text-slate-900 dark:text-white"
-                              : ""
-                          }`}
-                        />
-                        <span className="text-sm">{item.name}</span>
-                      </Link>
-                    );
-                  })}
+                              ? "bg-linear-to-r from-emerald-500/20 to-blue-500/20 text-emerald-400 font-bold border-emerald-500/30 shadow-lg shadow-emerald-900/20"
+                              : "border-transparent text-blue-100/70 hover:bg-white/5 hover:text-white font-medium",
+                          )}
+                        >
+                          <item.icon className="h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                          <span className="text-sm truncate">{item.name}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
 
-            <div className="p-4 border-t border-border/40 bg-card/50">
+            {/* ---> FOOTER <--- */}
+            <div className="p-3 border-t border-white/10 bg-black/20 shrink-0">
               <button
                 onClick={() => {
                   setIsOpen(false);
                   signOut({ callbackUrl: "/login" });
                 }}
-                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-muted-foreground hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 dark:hover:text-red-500 font-medium transition-colors group"
+                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-blue-200/60 hover:bg-red-500/20 hover:text-red-400 font-medium transition-colors group"
               >
-                <LogOut className="h-[18px] w-[18px] group-hover:-translate-x-1 transition-transform" />
-                <span className="text-sm">Log out securely</span>
+                <LogOut className="h-5 w-5 shrink-0 group-hover:-translate-x-1 transition-transform" />
+                <span className="text-sm truncate">Log out securely</span>
               </button>
             </div>
           </SheetContent>
@@ -370,7 +384,7 @@ export default function Navbar({
             </span>
           </div>
 
-          <div className="h-9 w-9 rounded-full bg-linear-to-tr from-primary to-purple-500 flex items-center justify-center text-white shadow-md font-bold text-sm cursor-pointer hover:opacity-90 transition-opacity overflow-hidden relative border border-border/50">
+          <div className="h-9 w-9 rounded-full bg-linear-to-tr from-emerald-500 to-blue-500 flex items-center justify-center text-white shadow-md font-bold text-sm cursor-pointer hover:opacity-90 transition-opacity overflow-hidden relative border border-border/50">
             {imageUrl ? (
               <Image
                 src={imageUrl}

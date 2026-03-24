@@ -9,21 +9,31 @@ import {
   dailyRecords,
   expenses,
   harvestRecords,
-  feedAllocations,
-  feedDeliveries,
 } from "../../../src/db/schema";
 import { eq, desc, asc } from "drizzle-orm";
 import { Archive, MapPin, Warehouse } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-// ---> NEW: The Paginated Container <---
 import BuildingHistoryClient from "./BuildingHistoryClient";
+
+// ---> STRICT TIMEZONE HELPERS <---
+const getMidnight = (dateInput: string | Date | null) => {
+  if (!dateInput) return 0;
+  const d = new Date(dateInput);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+
+const getEndOfDay = (dateInput: string | Date | null) => {
+  if (!dateInput) return 0;
+  const d = new Date(dateInput);
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+};
 
 export default async function HistoryPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
-  // 1. Fetch ONLY INACTIVE Loads
   const historicalLoadsData = await db
     .select({
       id: loads.id,
@@ -46,29 +56,16 @@ export default async function HistoryPage() {
     .where(eq(loads.isActive, false))
     .orderBy(asc(farms.name), asc(buildings.name), desc(loads.harvestDate));
 
-  // 2. Fetch raw datasets for Math Engine
   const allDailyRecords = await db.select().from(dailyRecords);
   const allExpenses = await db.select().from(expenses);
   const allHarvests = await db.select().from(harvestRecords);
-  const allAllocations = await db
-    .select({
-      loadId: feedAllocations.loadId,
-      feedType: feedAllocations.feedType,
-      allocatedDate: feedAllocations.allocatedDate,
-      allocatedQuantity: feedAllocations.allocatedQuantity,
-      unitPrice: feedDeliveries.unitPrice,
-    })
-    .from(feedAllocations)
-    .innerJoin(
-      feedDeliveries,
-      eq(feedAllocations.deliveryId, feedDeliveries.id),
-    );
 
-  // 3. Fetch ALL Loads to calculate overlapping dates
   const allLoadsWithFarm = await db
     .select({
       id: loads.id,
       farmId: buildings.farmId,
+      buildingName: buildings.name,
+      name: loads.name,
       loadDate: loads.loadDate,
       harvestDate: loads.harvestDate,
       isActive: loads.isActive,
@@ -83,20 +80,18 @@ export default async function HistoryPage() {
         ? loadHarvests[loadHarvests.length - 1].harvestDate
         : l.harvestDate;
 
-    const startTime = new Date(l.loadDate).getTime();
-    const endTime = trueHarvestDate
-      ? new Date(trueHarvestDate).getTime()
-      : new Date().getTime();
-
     return {
       farmId: l.farmId,
+      buildingName: l.buildingName,
+      name: l.name,
       isActive: l.isActive,
-      startTime: startTime,
-      endTime: l.isActive ? Infinity : endTime,
+      startTime: getMidnight(l.loadDate),
+      endTime: l.isActive
+        ? Infinity
+        : getEndOfDay(trueHarvestDate || new Date()),
     };
   });
 
-  // 4. THE MATH ENGINE
   const reports = historicalLoadsData.map((load) => {
     const actualQuantityLoad = Number(load.quantity) || 0;
     const loadRecords = allDailyRecords.filter((r) => r.loadId === load.id);
@@ -133,35 +128,23 @@ export default async function HistoryPage() {
         ? "Multiple Buyers"
         : uniqueCustomers[0] || load.customerName || "None";
 
-    const loadStartTime = new Date(load.loadDate).getTime();
-    const loadEndTime = actualHarvestDate
-      ? new Date(actualHarvestDate).getTime()
-      : new Date().getTime();
+    const loadStartTime = getMidnight(load.loadDate);
+    const loadEndTime = getEndOfDay(actualHarvestDate || new Date());
 
     const loadDirectExpenses = allExpenses.filter((e) => e.loadId === load.id);
-    const directExpenses = loadDirectExpenses.reduce(
+    const directExpensesAmount = loadDirectExpenses.reduce(
       (sum, e) => sum + Number(e.amount),
       0,
     );
 
-    const loadFeedAllocations = allAllocations.filter(
-      (fa) => fa.loadId === load.id,
-    );
-    const feedExpenses = loadFeedAllocations.reduce(
-      (sum, fa) => sum + Number(fa.allocatedQuantity) * Number(fa.unitPrice),
-      0,
-    );
-
-    const sharedExpenseShare = allExpenses
+    const sharedExpensesList = allExpenses
       .filter((e) => {
         if (e.farmId !== load.farmId || e.loadId !== null) return false;
-        // @ts-ignore
-        const expenseTime = new Date(e.expenseDate || e.createdAt).getTime();
+        const expenseTime = getMidnight(e.expenseDate || e.createdAt);
         return expenseTime >= loadStartTime && expenseTime <= loadEndTime;
       })
-      .reduce((sum, e) => {
-        // @ts-ignore
-        const expenseTime = new Date(e.expenseDate || e.createdAt).getTime();
+      .map((e) => {
+        const expenseTime = getMidnight(e.expenseDate || e.createdAt);
         const activeBatchesOnThisDay = allLoadsWithTrueTimeline.filter(
           (timeline) => {
             if (timeline.farmId !== load.farmId) return false;
@@ -170,15 +153,28 @@ export default async function HistoryPage() {
               expenseTime <= timeline.endTime
             );
           },
-        ).length;
+        );
 
-        const divisor = activeBatchesOnThisDay > 0 ? activeBatchesOnThisDay : 1;
-        return sum + Number(e.amount) / divisor;
-      }, 0);
+        const divisor =
+          activeBatchesOnThisDay.length > 0 ? activeBatchesOnThisDay.length : 1;
+        const sharedDetails = activeBatchesOnThisDay
+          .map((b) => `${b.buildingName} [${b.name || "Unnamed"}]`)
+          .join(", ");
 
-    const initialCapital = Number(load.initialCapital || 0);
-    const totalGrossCost =
-      initialCapital + directExpenses + sharedExpenseShare + feedExpenses;
+        return {
+          date: e.expenseDate,
+          type: e.expenseType,
+          remarks: `[Split 1/${divisor}] ${e.remarks || ""} (Shared across: ${sharedDetails})`,
+          amount: Number(e.amount) / divisor,
+        };
+      });
+
+    const sharedExpenseShare = sharedExpensesList.reduce(
+      (sum, e) => sum + e.amount,
+      0,
+    );
+    const totalGrossCost = directExpensesAmount + sharedExpenseShare;
+
     const actualCostPerChick =
       actualHarvest > 0 ? totalGrossCost / actualHarvest : 0;
     const totalNetSales = totalRtlAmount - totalGrossCost;
@@ -187,13 +183,19 @@ export default async function HistoryPage() {
     const harvestDateObj = actualHarvestDate
       ? new Date(actualHarvestDate)
       : new Date();
-
     const ageInDays = Math.max(
       1,
       Math.floor(
         (harvestDateObj.getTime() - loadDateObj.getTime()) /
           (1000 * 60 * 60 * 24),
       ),
+    );
+
+    const feedExpenseRecords = loadDirectExpenses.filter(
+      (e) => e.expenseType === "feeds",
+    );
+    const otherExpenseRecords = loadDirectExpenses.filter(
+      (e) => e.expenseType !== "feeds",
     );
 
     return {
@@ -213,24 +215,26 @@ export default async function HistoryPage() {
       ageInDays,
       loadDateStr: new Date(load.loadDate).toLocaleDateString(),
       pdfPayload: {
-        feeds: loadFeedAllocations.map((fa) => ({
-          date: fa.allocatedDate,
-          type: fa.feedType,
-          qty: Number(fa.allocatedQuantity),
-          cost: Number(fa.allocatedQuantity) * Number(fa.unitPrice),
-        })),
-        expenses: loadDirectExpenses.map((e) => ({
+        feeds: feedExpenseRecords.map((e) => ({
           date: e.expenseDate,
-          type: e.expenseType,
-          remarks: e.remarks,
-          amount: Number(e.amount),
+          type: e.remarks?.split("of ")[1] || "FEEDS",
+          qty: e.remarks?.match(/Consumed ([\d.]+) sacks/)?.[1] || "0",
+          cost: Number(e.amount),
         })),
+        expenses: [
+          ...otherExpenseRecords.map((e) => ({
+            date: e.expenseDate,
+            type: e.expenseType,
+            remarks: e.remarks,
+            amount: Number(e.amount),
+          })),
+          ...sharedExpensesList,
+        ],
         sharedExpenseShare,
       },
     };
   });
 
-  // 5. GROUP BY FARM -> BUILDING
   const groupedHistory = reports.reduce(
     (acc, report) => {
       const farm = report.farmName;
@@ -246,9 +250,7 @@ export default async function HistoryPage() {
   const farmNames = Object.keys(groupedHistory);
 
   return (
-    // FIX: Reduced space-y from 10 to 4 to tighten everything up!
     <div className="space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto pb-12">
-      {/* 1. HEADER */}
       <div className="bg-card border border-border/50 p-6 lg:p-8 rounded-lg shadow-sm relative overflow-hidden flex flex-col justify-center">
         <div className="absolute top-0 right-0 w-64 h-64 bg-slate-500/10 rounded-full blur-3xl -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
         <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-3 text-foreground uppercase">
@@ -261,7 +263,6 @@ export default async function HistoryPage() {
         </p>
       </div>
 
-      {/* 2. HISTORY DATA TABS */}
       {farmNames.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-card border border-dashed border-border/50 rounded-[2rem]">
           <Archive className="h-16 w-16 text-muted-foreground/30 mb-4" />
@@ -273,7 +274,6 @@ export default async function HistoryPage() {
         </div>
       ) : (
         <Tabs defaultValue={farmNames[0]} className="w-full space-y-4">
-          {/* ---> OUTER TABS: FARMS <--- */}
           <div className="w-full overflow-x-auto pb-1 custom-scrollbar">
             <TabsList className="flex h-auto w-max items-center justify-start gap-2 bg-transparent p-0 border-none">
               {farmNames.map((farmName) => (
@@ -289,23 +289,19 @@ export default async function HistoryPage() {
             </TabsList>
           </div>
 
-          {/* FARMS CONTENT */}
           {farmNames.map((farmName) => {
             const buildingNames = Object.keys(groupedHistory[farmName]);
 
             return (
-              // FIX: Removed default mt-2 from TabsContent
               <TabsContent
                 key={farmName}
                 value={farmName}
                 className="outline-none animate-in fade-in zoom-in-95 duration-300 mt-0"
               >
-                {/* ---> INNER TABS: BUILDINGS <--- */}
                 <Tabs
                   defaultValue={buildingNames[0]}
                   className="w-full space-y-4"
                 >
-                  {/* BUILDING TAB PILLS */}
                   <div className="w-full overflow-x-auto pb-1 custom-scrollbar">
                     <TabsList className="flex h-auto w-max items-center justify-start gap-2 bg-slate-200/50 dark:bg-slate-800/50 p-1.5 rounded-[1rem]">
                       {buildingNames.map((buildingName) => (
@@ -321,7 +317,6 @@ export default async function HistoryPage() {
                     </TabsList>
                   </div>
 
-                  {/* BUILDINGS CONTENT (THE PAGINATED LOADS) */}
                   {buildingNames.map((buildingName) => {
                     const pastBatches = groupedHistory[farmName][buildingName];
 
@@ -331,7 +326,6 @@ export default async function HistoryPage() {
                         value={buildingName}
                         className="outline-none animate-in fade-in duration-500 mt-0"
                       >
-                        {/* ---> NEW: Using the Paginated Client Component! <--- */}
                         <BuildingHistoryClient
                           buildingName={buildingName}
                           pastBatches={pastBatches}

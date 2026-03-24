@@ -9,22 +9,33 @@ import {
   dailyRecords,
   expenses,
   harvestRecords,
-  feedAllocations,
-  feedDeliveries,
 } from "../../src/db/schema";
 import { eq, desc, asc } from "drizzle-orm";
 import { FileBarChart, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import KPISection from "./KPISection";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 import ActiveBatchCard from "./ActiveBatchCard";
+
+// ---> STRICT TIMEZONE HELPERS <---
+const getMidnight = (dateInput: string | Date | null) => {
+  if (!dateInput) return 0;
+  const d = new Date(dateInput);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+
+const getEndOfDay = (dateInput: string | Date | null) => {
+  if (!dateInput) return 0;
+  const d = new Date(dateInput);
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+};
 
 export default async function ReportsPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
-  // 1. Fetch ONLY ACTIVE Loads for the UI Cards
   const allLoadsData = await db
     .select({
       id: loads.id,
@@ -44,32 +55,19 @@ export default async function ReportsPage() {
     .from(loads)
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
     .innerJoin(farms, eq(buildings.farmId, farms.id))
-    .where(eq(loads.isActive, true)) // STRICTLY ACTIVE LOADS ONLY
+    .where(eq(loads.isActive, true))
     .orderBy(asc(farms.name), asc(buildings.name), desc(loads.loadDate));
 
   const allDailyRecords = await db.select().from(dailyRecords);
   const allExpenses = await db.select().from(expenses);
   const allHarvests = await db.select().from(harvestRecords);
 
-  const allAllocations = await db
-    .select({
-      loadId: feedAllocations.loadId,
-      feedType: feedAllocations.feedType,
-      allocatedDate: feedAllocations.allocatedDate,
-      allocatedQuantity: feedAllocations.allocatedQuantity,
-      unitPrice: feedDeliveries.unitPrice,
-    })
-    .from(feedAllocations)
-    .innerJoin(
-      feedDeliveries,
-      eq(feedAllocations.deliveryId, feedDeliveries.id),
-    );
-
-  // ---> THE FIX: Fetch ALL LOADS (Active & Inactive) to calculate precise overlap dates <---
   const allLoadsWithFarm = await db
     .select({
       id: loads.id,
       farmId: buildings.farmId,
+      buildingName: buildings.name,
+      name: loads.name,
       loadDate: loads.loadDate,
       harvestDate: loads.harvestDate,
       isActive: loads.isActive,
@@ -84,20 +82,18 @@ export default async function ReportsPage() {
         ? loadHarvests[loadHarvests.length - 1].harvestDate
         : l.harvestDate;
 
-    const startTime = new Date(l.loadDate).getTime();
-    const endTime = trueHarvestDate
-      ? new Date(trueHarvestDate).getTime()
-      : new Date().getTime();
-
     return {
       farmId: l.farmId,
+      buildingName: l.buildingName,
+      name: l.name,
       isActive: l.isActive,
-      startTime: startTime,
-      endTime: l.isActive ? Infinity : endTime,
+      startTime: getMidnight(l.loadDate),
+      endTime: l.isActive
+        ? Infinity
+        : getEndOfDay(trueHarvestDate || new Date()),
     };
   });
 
-  // 2. THE UPGRADED NUMBER CRUNCHING ENGINE
   const reports = allLoadsData.map((load) => {
     const actualQuantityLoad = Number(load.quantity) || 0;
 
@@ -130,45 +126,25 @@ export default async function ReportsPage() {
         ? "Multiple Buyers"
         : uniqueCustomers[0] || load.customerName || "None";
 
-    // --- SMART EXPENSE ENGINE (STRICT MIDNIGHT TIME-GATING) ---
-    const start = new Date(load.loadDate);
-    start.setHours(0, 0, 0, 0);
-    const loadStartTime = start.getTime();
+    const loadStartTime = getMidnight(load.loadDate);
+    const loadEndTime = load.isActive
+      ? Infinity
+      : getEndOfDay(load.harvestDate || new Date());
 
-    const end = load.harvestDate ? new Date(load.harvestDate) : new Date();
-    end.setHours(23, 59, 59, 999);
-    const loadEndTime = end.getTime();
-
-    // Direct Building Expenses
     const loadDirectExpenses = allExpenses.filter((e) => e.loadId === load.id);
     const directExpensesAmount = loadDirectExpenses.reduce(
       (sum, e) => sum + Number(e.amount),
       0,
     );
 
-    // Exact Feed Expense Math
-    const loadFeedAllocations = allAllocations.filter(
-      (fa) => fa.loadId === load.id,
-    );
-    const feedExpenses = loadFeedAllocations.reduce(
-      (sum, fa) => sum + Number(fa.allocatedQuantity) * Number(fa.unitPrice),
-      0,
-    );
-
-    // ---> THE FIX: Calculate Shared Expenses based on EXACT DATE OVERLAP <---
-    const sharedExpenseShare = allExpenses
+    const sharedExpensesList = allExpenses
       .filter((e) => {
-        // Must be a shared expense (no specific building attached)
         if (e.farmId !== load.farmId || e.loadId !== null) return false;
-
-        // Must happen within THIS flock's lifespan
-        const expenseTime = new Date(e.expenseDate || e.createdAt).getTime();
+        const expenseTime = getMidnight(e.expenseDate || e.createdAt);
         return expenseTime >= loadStartTime && expenseTime <= loadEndTime;
       })
-      .reduce((sum, e) => {
-        const expenseTime = new Date(e.expenseDate || e.createdAt).getTime();
-
-        // Dynamic Divisor: How many batches were active on this EXACT day?
+      .map((e) => {
+        const expenseTime = getMidnight(e.expenseDate || e.createdAt);
         const activeBatchesOnThisDay = allLoadsWithTrueTimeline.filter(
           (timeline) => {
             if (timeline.farmId !== load.farmId) return false;
@@ -177,19 +153,30 @@ export default async function ReportsPage() {
               expenseTime <= timeline.endTime
             );
           },
-        ).length;
+        );
 
-        const divisor = activeBatchesOnThisDay > 0 ? activeBatchesOnThisDay : 1;
-        return sum + Number(e.amount) / divisor;
-      }, 0);
-    // --------------------------------------------------------------------------
+        const divisor =
+          activeBatchesOnThisDay.length > 0 ? activeBatchesOnThisDay.length : 1;
+        const sharedDetails = activeBatchesOnThisDay
+          .map((b) => `${b.buildingName} [${b.name || "Unnamed"}]`)
+          .join(", ");
 
-    const totalGrossCost =
-      directExpensesAmount + sharedExpenseShare + feedExpenses;
+        return {
+          date: e.expenseDate,
+          type: e.expenseType,
+          remarks: `[Split 1/${divisor}] ${e.remarks || ""} (Shared across: ${sharedDetails})`,
+          amount: Number(e.amount) / divisor,
+        };
+      });
 
+    const sharedExpenseShare = sharedExpensesList.reduce(
+      (sum, e) => sum + e.amount,
+      0,
+    );
+
+    const totalGrossCost = directExpensesAmount + sharedExpenseShare;
     const actualCostPerChick =
       actualHarvest > 0 ? totalGrossCost / actualHarvest : 0;
-
     const totalNetSales = totalRtlAmount - totalGrossCost;
 
     const loadDateObj = new Date(load.loadDate);
@@ -213,6 +200,13 @@ export default async function ReportsPage() {
       );
     }
 
+    const feedExpenseRecords = loadDirectExpenses.filter(
+      (e) => e.expenseType === "feeds",
+    );
+    const otherExpenseRecords = loadDirectExpenses.filter(
+      (e) => e.expenseType !== "feeds",
+    );
+
     return {
       ...load,
       farmMortality,
@@ -227,24 +221,26 @@ export default async function ReportsPage() {
       ageInDays,
       loadDateStr: new Date(load.loadDate).toLocaleDateString(),
       pdfPayload: {
-        feeds: loadFeedAllocations.map((fa) => ({
-          date: fa.allocatedDate,
-          type: fa.feedType,
-          qty: Number(fa.allocatedQuantity),
-          cost: Number(fa.allocatedQuantity) * Number(fa.unitPrice),
-        })),
-        expenses: loadDirectExpenses.map((e) => ({
+        feeds: feedExpenseRecords.map((e) => ({
           date: e.expenseDate,
-          type: e.expenseType,
-          remarks: e.remarks,
-          amount: Number(e.amount),
+          type: e.remarks?.split("of ")[1] || "FEEDS",
+          qty: e.remarks?.match(/Consumed ([\d.]+) sacks/)?.[1] || "0",
+          cost: Number(e.amount),
         })),
+        expenses: [
+          ...otherExpenseRecords.map((e) => ({
+            date: e.expenseDate,
+            type: e.expenseType,
+            remarks: e.remarks,
+            amount: Number(e.amount),
+          })),
+          ...sharedExpensesList,
+        ],
         sharedExpenseShare,
       },
     };
   });
 
-  // 3. EXECUTIVE GROUPING & TOTALS
   const globalTotals = {
     activeBirds: 0,
     totalCapital: 0,
@@ -258,9 +254,8 @@ export default async function ReportsPage() {
       if (!acc[farm]) acc[farm] = [];
       acc[farm].push(report);
 
-      if (report.actualHarvest > 0) {
+      if (report.actualHarvest > 0)
         globalTotals.totalNetSales += report.totalNetSales;
-      }
 
       globalTotals.totalCapital += Number(report.initialCapital);
       globalTotals.totalMortality += report.farmMortality;
@@ -277,7 +272,6 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto pb-12">
-      {/* 1. EXECUTIVE HEADER & GLOBAL KPIs */}
       <div className="flex flex-col xl:flex-row gap-6 mb-8">
         <div className="w-full shrink-0 bg-card border border-border/50 p-6 lg:p-8 rounded-lg shadow-sm relative overflow-hidden flex flex-col justify-center">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
@@ -296,7 +290,6 @@ export default async function ReportsPage() {
         </div>
       </div>
 
-      {/* 2. HIERARCHY: FARM -> BUILDINGS */}
       {Object.keys(groupedData).length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-card border border-dashed border-border/50 rounded-3xl">
           <FileBarChart className="h-16 w-16 text-muted-foreground/30 mb-4" />
@@ -312,7 +305,6 @@ export default async function ReportsPage() {
 
             return (
               <div key={farmName} className="space-y-6">
-                {/* FARM HEADER */}
                 <div className="flex items-center gap-3 pb-2 border-b-[3px] border-blue-600/30">
                   <MapPin className="h-6 w-6 sm:h-7 sm:w-7 text-blue-600" />
                   <h2 className="text-xl sm:text-2xl font-black tracking-tighter uppercase text-foreground">
@@ -320,7 +312,6 @@ export default async function ReportsPage() {
                   </h2>
                 </div>
 
-                {/* BUILDING TABS */}
                 <div className="w-full max-w-full overflow-hidden">
                   <Tabs defaultValue={defaultTab} className="w-full">
                     <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
@@ -342,7 +333,6 @@ export default async function ReportsPage() {
                       </TabsList>
                     </div>
 
-                    {/* TABS CONTENT: Render the Client Component */}
                     {loadsInFarm.map((report) => (
                       <TabsContent
                         key={`content-${report.id}`}

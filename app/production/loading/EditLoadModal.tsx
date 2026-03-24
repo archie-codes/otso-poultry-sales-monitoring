@@ -26,7 +26,6 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
 import {
-  Edit2,
   Loader2,
   Save,
   ChevronsUpDown,
@@ -94,9 +93,8 @@ export default function EditLoadModal({
       return;
     }
 
-    // ---> EDIT DATE SAFETY LOCKS <---
     const today = new Date();
-    today.setHours(23, 59, 59, 999); // Allow any time today
+    today.setHours(23, 59, 59, 999);
 
     if (loadDate > today) {
       toast.error("Invalid Timeline", {
@@ -113,7 +111,6 @@ export default function EditLoadModal({
       });
       return;
     }
-    // --------------------------------------
 
     setLoading(true);
 
@@ -121,7 +118,6 @@ export default function EditLoadModal({
     formData.set("id", load.id);
     formData.set("chickType", chickType);
 
-    // SAFELY STRIP COMMAS FROM FORMATTED INPUTS
     const rawQuantity = formData.get("quantity") as string;
     if (rawQuantity) formData.set("quantity", rawQuantity.replace(/,/g, ""));
 
@@ -133,7 +129,6 @@ export default function EditLoadModal({
     if (rawCapital)
       formData.set("initialCapital", rawCapital.replace(/,/g, ""));
 
-    // Format dates cleanly using date-fns
     formData.set("loadDate", format(loadDate, "yyyy-MM-dd"));
     if (harvestDate) {
       formData.set("harvestDate", format(harvestDate, "yyyy-MM-dd"));
@@ -151,7 +146,7 @@ export default function EditLoadModal({
         description: "Load details successfully updated.",
         style: { backgroundColor: "blue", color: "white", border: "none" },
       });
-      onClose(); // <-- Use onClose instead of setIsOpen
+      onClose();
       if (onSuccess) onSuccess();
     }
     setLoading(false);
@@ -196,8 +191,9 @@ export default function EditLoadModal({
                     selected={loadDate}
                     onSelect={(date) => {
                       setLoadDate(date);
-                      setOpenLoadDate(false); // Auto-close
+                      setOpenLoadDate(false); // Auto close
                     }}
+                    disabled={(date) => date > new Date()} // Block Future Dates
                     initialFocus
                   />
                 </PopoverContent>
@@ -235,7 +231,7 @@ export default function EditLoadModal({
                     selected={harvestDate}
                     onSelect={(date) => {
                       setHarvestDate(date);
-                      setOpenHarvestDate(false); // Auto-close
+                      setOpenHarvestDate(false); // Auto close
                     }}
                     initialFocus
                   />
@@ -276,7 +272,7 @@ export default function EditLoadModal({
                     <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-(--radix-popover-trigger-width) p-0 z-200">
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-200">
                   <Command>
                     <CommandInput
                       placeholder="Search breed..."
@@ -295,7 +291,7 @@ export default function EditLoadModal({
                                   (b) => b.toLowerCase() === v.toLowerCase(),
                                 ) || v;
                               setChickType(selectedBreed);
-                              setOpenChickType(false); // Auto-close
+                              setOpenChickType(false); // Auto close
                             }}
                             className="py-2.5"
                           >
@@ -378,7 +374,7 @@ export default function EditLoadModal({
             <Button
               type="button"
               variant="outline"
-              onClick={onClose} // <-- Use onClose here too
+              onClick={onClose}
               className="rounded-xl h-11 px-6 font-bold"
             >
               Cancel

@@ -136,14 +136,7 @@ export default function ActiveBatchCard({ report }: { report: any }) {
       formatMoneyPDF(e.amount),
     ]);
 
-    if (report.pdfPayload.sharedExpenseShare > 0) {
-      expRows.push([
-        "-",
-        "Farm Shared Expenses",
-        "Pro-rated share to date",
-        formatMoneyPDF(report.pdfPayload.sharedExpenseShare),
-      ]);
-    }
+    // ---> Duplicate summary row completely removed from here! <---
 
     autoTable(doc, {
       startY: expY + 20,
@@ -168,7 +161,6 @@ export default function ActiveBatchCard({ report }: { report: any }) {
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <h4 className="text-lg sm:text-xl font-black uppercase tracking-tight text-foreground flex items-center">
               {report.buildingName}
-              {/* ---> FIX: Display the Load Name <--- */}
               <span className="text-muted-foreground font-bold text-sm ml-2.5 px-2.5 py-0.5 bg-slate-200/50 dark:bg-slate-800/50 rounded-md">
                 {report.name || "Unnamed"}
               </span>
@@ -205,7 +197,6 @@ export default function ActiveBatchCard({ report }: { report: any }) {
           </div>
         </div>
 
-        {/* ---> FIX: The 3-Dot Menu for PDF Generation <--- */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

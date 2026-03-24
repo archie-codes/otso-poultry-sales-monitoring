@@ -16,6 +16,7 @@ import {
   ChevronDown,
   AlertTriangle,
   Wallet,
+  ArrowRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -38,6 +39,16 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
+async function fetchOtherBuildingsInFarm(
+  farmName: string,
+  currentLoadId: number,
+) {
+  const res = await fetch(`/api/loads?farm=${encodeURIComponent(farmName)}`);
+  if (!res.ok) return [];
+  const loads = await res.json();
+  return loads.filter((l: any) => l.isActive && l.id !== currentLoadId);
+}
+
 export default function LogHarvestModal({ load }: { load: any }) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -52,10 +63,8 @@ export default function LogHarvestModal({ load }: { load: any }) {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isManualClose, setIsManualClose] = useState(false);
 
-  // ---> NEW: The Key Reset State for Auto-Fill <---
   const [autoFillKey, setAutoFillKey] = useState(0);
 
-  // Live Math States
   const [harvestQuantity, setHarvestQuantity] = useState<string>("");
   const [sellingPriceInput, setSellingPriceInput] = useState<string>(
     load.sellingPrice?.toString() || "",
@@ -66,6 +75,23 @@ export default function LogHarvestModal({ load }: { load: any }) {
     Number(sellingPriceInput.replace(/,/g, "").trim()) || 0;
   const computedRevenue = cleanQuantity * cleanSellingPrice;
 
+  const leftoverFeedsQty = Number(load.remainingFeeds || 0);
+  const [otherActiveLoads, setOtherActiveLoads] = useState<any[]>([]);
+
+  // ---> STRICT TIMEZONE SAFE PARSER <---
+  let safeLoadDateObj: Date | null = null;
+  if (load && load.loadDate) {
+    const parts = String(load.loadDate).split("T")[0].split("-");
+    if (parts.length === 3) {
+      safeLoadDateObj = new Date(
+        Number(parts[0]),
+        Number(parts[1]) - 1,
+        Number(parts[2]),
+      );
+      safeLoadDateObj.setHours(0, 0, 0, 0);
+    }
+  }
+
   useEffect(() => {
     if (isOpen) {
       setFetchingData(true);
@@ -73,7 +99,7 @@ export default function LogHarvestModal({ load }: { load: any }) {
       setSellingPriceInput(load.sellingPrice?.toString() || "");
       setHarvestDate(new Date());
       setIsManualClose(false);
-      setAutoFillKey(0); // Reset the redraw key when modal opens
+      setAutoFillKey(0);
 
       Promise.all([
         getLiveBirdCount(load.id),
@@ -83,10 +109,16 @@ export default function LogHarvestModal({ load }: { load: any }) {
         setTotalExpenses(expenses);
         setFetchingData(false);
       });
+
+      if (leftoverFeedsQty > 0) {
+        fetchOtherBuildingsInFarm(load.farmName, load.id).then((data) => {
+          setOtherActiveLoads(data);
+        });
+      }
     } else {
       setTimeout(() => setSuccessData(null), 300);
     }
-  }, [isOpen, load.id, load.sellingPrice]);
+  }, [isOpen, load.id, load.sellingPrice, leftoverFeedsQty, load.farmName]);
 
   const isAutoFinalHarvest =
     availableBirds !== null &&
@@ -95,46 +127,48 @@ export default function LogHarvestModal({ load }: { load: any }) {
 
   const isExceeding = availableBirds !== null && cleanQuantity > availableBirds;
   const remainingAfterHarvest = (availableBirds || 0) - cleanQuantity;
+
   const isDiscrepancy =
     !isAutoFinalHarvest && isManualClose && remainingAfterHarvest > 0;
+
+  const isClosingBuilding = isAutoFinalHarvest || isManualClose;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (!harvestDate) {
-      toast.error("Please select a harvest date.");
-      return;
-    }
+    if (!harvestDate) return toast.error("Please select a harvest date.");
+    if (isExceeding)
+      return toast.error("Cannot harvest more birds than available!");
 
-    if (isExceeding) {
-      toast.error("Cannot harvest more birds than available!");
-      return;
-    }
-
-    const loadDateObj = new Date(load.loadDate);
-    loadDateObj.setHours(0, 0, 0, 0);
-    const harvestDateCheck = new Date(harvestDate);
-    harvestDateCheck.setHours(0, 0, 0, 0);
+    // ---> STRICT DATE VALIDATION <---
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setHours(23, 59, 59, 999);
 
-    if (harvestDateCheck < loadDateObj) {
+    if (harvestDate.getTime() > today.getTime()) {
       toast.error("Invalid Date", {
-        description: `You cannot harvest before the load date (${format(loadDateObj, "MMM d, yyyy")}).`,
+        description: "Cannot log a harvest for a future date.",
+        style: { backgroundColor: "red", color: "white", border: "none" },
       });
       return;
     }
 
-    if (harvestDateCheck > today) {
-      toast.error("Invalid Date", {
-        description: "You cannot log a harvest for a future date.",
-      });
-      return;
+    if (safeLoadDateObj) {
+      const hDate = new Date(harvestDate);
+      hDate.setHours(0, 0, 0, 0);
+
+      if (hDate.getTime() < safeLoadDateObj.getTime()) {
+        toast.error("Invalid Date", {
+          description: `Cannot harvest before load date (${format(safeLoadDateObj, "MMM d, yyyy")}).`,
+          style: { backgroundColor: "red", color: "white", border: "none" },
+        });
+        return;
+      }
     }
+    // --------------------------------------
 
     const formData = new FormData(e.currentTarget);
 
-    if (!isAutoFinalHarvest && isManualClose && remainingAfterHarvest > 0) {
+    if (isDiscrepancy) {
       const confirmed = window.confirm(
         `⚠️ WARNING: DISCREPANCY DETECTED ⚠️\n\nYou are closing this building, but the system shows ${remainingAfterHarvest.toLocaleString()} birds are still inside.\n\nAre you absolutely sure this building is completely empty?`,
       );
@@ -147,8 +181,12 @@ export default function LogHarvestModal({ load }: { load: any }) {
     formData.set("quantity", String(cleanQuantity));
     formData.set("sellingPrice", String(cleanSellingPrice));
 
-    if (isAutoFinalHarvest) {
+    if (isClosingBuilding) {
       formData.set("isFinalHarvest", "on");
+      formData.set(
+        "leftoverResolution",
+        leftoverFeedsQty > 0 ? "transfer" : "none",
+      );
     }
 
     const result = await logHarvest(formData);
@@ -157,6 +195,11 @@ export default function LogHarvestModal({ load }: { load: any }) {
       toast.error(result.error);
     } else {
       setSuccessData(result);
+      if (isClosingBuilding && leftoverFeedsQty > 0) {
+        toast.success("Batch Closed & Feeds Transferred!", {
+          description: `${leftoverFeedsQty} sacks successfully moved to the new building.`,
+        });
+      }
     }
     setLoading(false);
   }
@@ -328,7 +371,21 @@ export default function LogHarvestModal({ load }: { load: any }) {
                         selected={harvestDate}
                         onSelect={(date) => {
                           setHarvestDate(date);
-                          setIsCalendarOpen(false);
+                          setIsCalendarOpen(false); // Auto close
+                        }}
+                        disabled={(date) => {
+                          // ---> DISABLED DATE LOGIC <---
+                          const today = new Date();
+                          today.setHours(23, 59, 59, 999);
+                          if (date > today) return true; // Block future
+
+                          if (safeLoadDateObj) {
+                            const checkDate = new Date(date);
+                            checkDate.setHours(0, 0, 0, 0);
+                            if (checkDate.getTime() < safeLoadDateObj.getTime())
+                              return true; // Block before load
+                          }
+                          return false;
                         }}
                         initialFocus
                       />
@@ -348,7 +405,6 @@ export default function LogHarvestModal({ load }: { load: any }) {
                   <label className="text-[9px] font-bold uppercase tracking-widest text-emerald-600">
                     Quantity Harvested *
                   </label>
-                  {/* ---> KEY RESET APPLIED HERE <--- */}
                   <FormattedNumberInput
                     key={`qty-input-${autoFillKey}`}
                     name="displayQuantity"
@@ -491,12 +547,11 @@ export default function LogHarvestModal({ load }: { load: any }) {
                         const checked = e.target.checked;
                         setIsManualClose(checked);
 
-                        // ---> UPGRADED AUTO-FILL TRIGGER <---
                         if (checked && availableBirds && cleanQuantity === 0) {
                           const formattedVal =
                             availableBirds.toLocaleString("en-US");
                           setHarvestQuantity(formattedVal);
-                          setAutoFillKey((prev) => prev + 1); // This completely redraws the visual input box!
+                          setAutoFillKey((prev) => prev + 1);
                         }
                       }}
                       className="mt-0.5 w-4 h-4 rounded text-red-600 cursor-pointer"
@@ -535,6 +590,56 @@ export default function LogHarvestModal({ load }: { load: any }) {
                 </div>
               )}
 
+              {isClosingBuilding && leftoverFeedsQty > 0 && (
+                <div className="p-4 rounded-xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 space-y-3 animate-in slide-in-from-bottom-2 fade-in">
+                  <div className="flex items-start gap-2.5">
+                    <div className="p-1.5 bg-amber-100 text-amber-600 rounded-lg shrink-0">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-amber-800 dark:text-amber-500 uppercase tracking-tight">
+                        Leftover Feeds Detected
+                      </h4>
+                      <p className="text-[10px] font-bold text-amber-700 mt-0.5">
+                        There are{" "}
+                        <strong className="text-amber-600">
+                          {leftoverFeedsQty} sacks
+                        </strong>{" "}
+                        of feed remaining in this building. Transfer them before
+                        closing.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-amber-700 flex items-center gap-1.5 mb-1.5">
+                      <ArrowRightLeft className="w-3 h-3" />
+                      Transfer to Building in {load.farmName} *
+                    </label>
+
+                    {otherActiveLoads.length > 0 ? (
+                      <select
+                        name="targetLoadId"
+                        required
+                        className="w-full h-10 px-3 rounded-lg border-amber-200 bg-white text-sm font-bold text-foreground focus:ring-amber-500 focus:border-amber-500"
+                      >
+                        <option value="">-- Select Destination --</option>
+                        {otherActiveLoads.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.buildingName} ({l.name})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="h-10 flex items-center px-3 rounded-lg bg-red-100 text-red-600 text-xs font-bold border border-red-200">
+                        No other active buildings found. Please add a new batch
+                        first.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-3 border-t border-border/50">
                 <Button
                   type="button"
@@ -546,7 +651,14 @@ export default function LogHarvestModal({ load }: { load: any }) {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={loading || fetchingData || isExceeding}
+                  disabled={
+                    loading ||
+                    fetchingData ||
+                    isExceeding ||
+                    (isClosingBuilding &&
+                      leftoverFeedsQty > 0 &&
+                      otherActiveLoads.length === 0)
+                  }
                   className={cn(
                     "rounded-xl font-bold text-white px-6 h-10 text-xs transition-all",
                     isDiscrepancy

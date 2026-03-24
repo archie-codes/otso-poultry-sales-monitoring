@@ -123,8 +123,9 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
                   selected={dateAdded}
                   onSelect={(date) => {
                     setDateAdded(date);
-                    setIsCalendarOpen(false);
+                    setIsCalendarOpen(false); // Auto close
                   }}
+                  disabled={(date) => date > new Date()} // Block Future Dates!
                   initialFocus
                 />
               </PopoverContent>

@@ -30,6 +30,7 @@ import {
   Loader2,
   Save,
   Wheat,
+  Building,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -62,12 +63,7 @@ import {
 } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
-import {
-  deleteFeedDelivery,
-  updateFeedDelivery,
-  deleteFeedTransfer,
-} from "./actions";
+import { deleteFeedDelivery, updateFeedDelivery } from "./actions";
 
 const formatSacks = (val: number | string | null | undefined) => {
   const num = Number(val);
@@ -100,6 +96,11 @@ export default function InventoryTableClient({
   const itemsPerPage = 10;
   const [activeTab, setActiveTab] = useState("deliveries");
 
+  // ---> SPLIT DATA AUTOMATICALLY <---
+  const warehouseTransfers = transfers.filter((t) => !t.isInternalTransfer);
+  const internalTransfers = transfers.filter((t) => t.isInternalTransfer);
+
+  // --- DELIVERY TAB STATE ---
   const [openSupplier, setOpenSupplier] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState("all");
   const [deliverySearch, setDeliverySearch] = useState("");
@@ -109,7 +110,6 @@ export default function InventoryTableClient({
 
   const [editingDelivery, setEditingDelivery] = useState<any | null>(null);
   const [deletingDelivery, setDeletingDelivery] = useState<any | null>(null);
-  const [deletingTransfer, setDeletingTransfer] = useState<any | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const uniqueSuppliers = useMemo(() => {
@@ -139,12 +139,13 @@ export default function InventoryTableClient({
     (deliveryPage - 1) * itemsPerPage + itemsPerPage,
   );
 
+  // --- WAREHOUSE TRANSFER TAB STATE ---
   const [transferSearch, setTransferSearch] = useState("");
   const [transferPage, setTransferPage] = useState(1);
   const [transferDate, setTransferDate] = useState<Date | undefined>(undefined);
   const [openTransferDate, setOpenTransferDate] = useState(false);
 
-  const filteredTransfers = transfers.filter((record) => {
+  const filteredTransfers = warehouseTransfers.filter((record) => {
     const matchesSearch =
       record.feedType.toLowerCase().includes(transferSearch.toLowerCase()) ||
       record.buildingName
@@ -164,6 +165,35 @@ export default function InventoryTableClient({
     (transferPage - 1) * itemsPerPage + itemsPerPage,
   );
 
+  // --- INTERNAL TRANSFER TAB STATE ---
+  const [internalSearch, setInternalSearch] = useState("");
+  const [internalPage, setInternalPage] = useState(1);
+  const [internalDate, setInternalDate] = useState<Date | undefined>(undefined);
+  const [openInternalDate, setOpenInternalDate] = useState(false);
+
+  const filteredInternal = internalTransfers.filter((record) => {
+    const matchesSearch =
+      record.feedType.toLowerCase().includes(internalSearch.toLowerCase()) ||
+      record.buildingName
+        .toLowerCase()
+        .includes(internalSearch.toLowerCase()) ||
+      (record.sourceBuilding || "")
+        .toLowerCase()
+        .includes(internalSearch.toLowerCase());
+    const matchesDate =
+      !internalDate ||
+      format(new Date(record.allocatedDate), "yyyy-MM-dd") ===
+        format(internalDate, "yyyy-MM-dd");
+    return matchesSearch && matchesDate;
+  });
+
+  const totalInternalPages = Math.ceil(filteredInternal.length / itemsPerPage);
+  const paginatedInternal = filteredInternal.slice(
+    (internalPage - 1) * itemsPerPage,
+    (internalPage - 1) * itemsPerPage + itemsPerPage,
+  );
+
+  // --- MATH TOTALS ---
   const grandTotalQuantity = filteredDeliveries.reduce(
     (sum, r) => sum + Number(r.quantity),
     0,
@@ -181,8 +211,11 @@ export default function InventoryTableClient({
     0,
   );
   const grandTotalReceipt = grandTotalCashBond + grandTotalPayment;
-
   const grandTotalTransferred = filteredTransfers.reduce(
+    (sum, r) => sum + Number(r.allocatedQuantity),
+    0,
+  );
+  const grandTotalInternal = filteredInternal.reduce(
     (sum, r) => sum + Number(r.allocatedQuantity),
     0,
   );
@@ -195,16 +228,6 @@ export default function InventoryTableClient({
     else toast.success("Delivery safely deleted!");
     setIsProcessing(false);
     setDeletingDelivery(null);
-  };
-
-  const handleDeleteTransfer = async () => {
-    if (!deletingTransfer) return;
-    setIsProcessing(true);
-    const res = await deleteFeedTransfer(deletingTransfer.id);
-    if (res.error) toast.error(res.error);
-    else toast.success("Transfer reversed! Feeds returned to warehouse.");
-    setIsProcessing(false);
-    setDeletingTransfer(null);
   };
 
   const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -229,9 +252,7 @@ export default function InventoryTableClient({
     setIsProcessing(false);
   };
 
-  const handlePrint = () => window.print();
-
-  const downloadCSV = (type: "deliveries" | "transfers") => {
+  const downloadCSV = (type: "deliveries" | "transfers" | "internal") => {
     let csv = "";
     if (type === "deliveries") {
       csv =
@@ -242,15 +263,19 @@ export default function InventoryTableClient({
         const bond = qty * Number(r.cashBond);
         const payment = qty * Number(r.unitPrice);
         const total = bond + payment;
-        const cleanDate = format(new Date(r.deliveryDate), "MM/dd/yyyy");
-        csv += `"${cleanDate}","${r.supplierName}","${r.feedType}",${qty},${rem},${r.unitPrice},${r.cashBond},${bond},${payment},${total}\n`;
+        csv += `"${format(new Date(r.deliveryDate), "MM/dd/yyyy")}","${r.supplierName}","${r.feedType}",${qty},${rem},${r.unitPrice},${r.cashBond},${bond},${payment},${total}\n`;
+      });
+    } else if (type === "transfers") {
+      csv =
+        "Date Moved,Feed Type,Qty Dispatched (Sacks),Farm,Building,Handled By\n";
+      filteredTransfers.forEach((t) => {
+        csv += `"${format(new Date(t.allocatedDate), "MM/dd/yyyy")}","${t.feedType}",${Number(t.allocatedQuantity)},"${t.farmName}","${t.buildingName}","${t.staffName || "System Admin"}"\n`;
       });
     } else {
       csv =
-        "Date Moved,Feed Type,Qty Dispatched (Sacks),Farm,Building,Load,Handled By\n";
-      filteredTransfers.forEach((t) => {
-        const cleanDate = format(new Date(t.allocatedDate), "MM/dd/yyyy");
-        csv += `"${cleanDate}","${t.feedType}",${Number(t.allocatedQuantity)},"${t.farmName}","${t.buildingName}","Load ${t.loadId}","${t.staffName || "System Admin"}"\n`;
+        "Date Moved,Feed Type,Qty Moved (Sacks),Farm,From Building,To Building,Handled By\n";
+      filteredInternal.forEach((t) => {
+        csv += `"${format(new Date(t.allocatedDate), "MM/dd/yyyy")}","${t.feedType}",${Number(t.allocatedQuantity)},"${t.farmName}","${t.sourceBuilding || "Unknown"}","${t.buildingName}","${t.staffName || "System Admin"}"\n`;
       });
     }
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -266,20 +291,19 @@ export default function InventoryTableClient({
     document.body.removeChild(link);
   };
 
-  const generatePDF = (type: "deliveries" | "transfers") => {
+  const generatePDF = (type: "deliveries" | "transfers" | "internal") => {
     const doc = new jsPDF(type === "deliveries" ? "landscape" : "portrait");
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
     doc.text("Otso Poultry Farm", 14, 20);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text(
-      type === "deliveries"
-        ? "Official Warehouse Feed Ledger"
-        : "Official Dispatch Manifest",
-      14,
-      26,
-    );
+
+    let title = "Official Warehouse Feed Ledger";
+    if (type === "transfers") title = "Official Dispatch Manifest";
+    if (type === "internal") title = "Farm Internal Logs";
+
+    doc.text(title, 14, 26);
     doc.text(`Print Date: ${format(new Date(), "MMMM d, yyyy")}`, 14, 32);
 
     if (type === "deliveries") {
@@ -347,7 +371,7 @@ export default function InventoryTableClient({
         },
         styles: { fontSize: 7 },
       });
-    } else {
+    } else if (type === "transfers") {
       const tableColumn = [
         "Date Moved",
         "Feed Type",
@@ -387,6 +411,52 @@ export default function InventoryTableClient({
         },
         styles: { fontSize: 9 },
       });
+    } else {
+      const tableColumn = [
+        "Date Moved",
+        "Feed Type",
+        "Qty Moved",
+        "Farm",
+        "From Building",
+        "To Building",
+        "Handled By",
+      ];
+      const tableRows: any[] = [];
+      filteredInternal.forEach((t) => {
+        tableRows.push([
+          format(new Date(t.allocatedDate), "MMM d, yyyy"),
+          t.feedType,
+          formatSacks(t.allocatedQuantity),
+          t.farmName,
+          t.sourceBuilding || "Unknown",
+          t.buildingName,
+          t.staffName || "System",
+        ]);
+      });
+      autoTable(doc, {
+        startY: 40,
+        head: [tableColumn],
+        body: tableRows,
+        foot: [
+          [
+            "TOTAL SACKS MOVED",
+            "",
+            formatSacks(grandTotalInternal),
+            "",
+            "",
+            "",
+            "",
+          ],
+        ],
+        theme: "grid",
+        headStyles: { fillColor: [15, 23, 42] },
+        footStyles: {
+          fillColor: [241, 245, 249],
+          textColor: [15, 23, 42],
+          fontStyle: "bold",
+        },
+        styles: { fontSize: 8 },
+      });
     }
     doc.save(`Otso_${type}_Report_${format(new Date(), "yyyy-MM-dd")}.pdf`);
   };
@@ -394,24 +464,35 @@ export default function InventoryTableClient({
   return (
     <div className="flex flex-col space-y-8 relative">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="px-5 sm:px-6">
-          <TabsList className="h-12 bg-slate-200/50 dark:bg-slate-800/50 rounded-lg p-1 flex max-w-md">
+        {/* ---> UPDATED 3-TABS NAVIGATION <--- */}
+        <div className="px-5 sm:px-6 overflow-x-auto scrollbar-hide pb-2">
+          <TabsList className="h-12 bg-slate-200/50 dark:bg-slate-800/50 rounded-lg p-1 flex w-max min-w-full sm:min-w-[600px]">
             <TabsTrigger
               value="deliveries"
-              className="flex-1 rounded-xl text-xs font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all"
+              className="flex-1 rounded-xl text-xs font-black uppercase tracking-widest data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all whitespace-nowrap px-4"
             >
               <Truck className="w-4 h-4 mr-2 opacity-70" /> Supplier Ledger
             </TabsTrigger>
             <TabsTrigger
               value="transfers"
-              className="flex-1 rounded-xl text-xs font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-amber-700 data-[state=active]:shadow-sm transition-all"
+              className="flex-1 rounded-xl text-xs font-black uppercase tracking-widest data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-amber-700 data-[state=active]:shadow-sm transition-all whitespace-nowrap px-4"
             >
-              <ArrowRightLeft className="w-4 h-4 mr-2 opacity-70" /> Transfer
-              Logs
+              <Building2 className="w-4 h-4 mr-2 opacity-70" /> Warehouse
+              Dispatch
+            </TabsTrigger>
+            <TabsTrigger
+              value="internal"
+              className="flex-1 rounded-xl text-xs font-black uppercase tracking-widest data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm transition-all whitespace-nowrap px-4"
+            >
+              <ArrowRightLeft className="w-4 h-4 mr-2 opacity-70" /> Farm
+              Internal Logs
             </TabsTrigger>
           </TabsList>
         </div>
 
+        {/* ========================================================= */}
+        {/* TAB 1: SUPPLIER DELIVERIES (INBOUND)                      */}
+        {/* ========================================================= */}
         <TabsContent
           value="deliveries"
           className="mt-4 px-5 sm:px-6 animate-in fade-in zoom-in-95 duration-300"
@@ -448,15 +529,14 @@ export default function InventoryTableClient({
                       onClick={() => generatePDF("deliveries")}
                       className="flex items-center gap-3 p-3 font-bold text-sm cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
-                      <Printer className="w-4 h-4 text-blue-600" />
-                      Download PDF
+                      <Printer className="w-4 h-4 text-blue-600" /> Download PDF
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => downloadCSV("deliveries")}
                       className="flex items-center gap-3 p-3 font-bold text-sm cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     >
-                      <Download className="w-4 h-4 text-emerald-600" />
-                      Download Excel (CSV)
+                      <Download className="w-4 h-4 text-emerald-600" /> Download
+                      Excel (CSV)
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -565,7 +645,7 @@ export default function InventoryTableClient({
                                   ? "opacity-100"
                                   : "opacity-0",
                               )}
-                            />
+                            />{" "}
                             ALL SUPPLIERS
                           </CommandItem>
                           {uniqueSuppliers.map((supplier) => (
@@ -586,7 +666,7 @@ export default function InventoryTableClient({
                                     ? "opacity-100"
                                     : "opacity-0",
                                 )}
-                              />
+                              />{" "}
                               {supplier}
                             </CommandItem>
                           ))}
@@ -600,7 +680,7 @@ export default function InventoryTableClient({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-amber-50/50 dark:bg-slate-950 border border-amber-200 dark:border-slate-800 p-4 rounded-2xl flex items-center gap-4 transition-all">
-                <div className="p-3 bg-amber-100 text-amber-600  rounded-xl">
+                <div className="p-3 bg-amber-100 text-amber-600 rounded-xl">
                   <Coins className="w-5 h-5" />
                 </div>
                 <div>
@@ -855,24 +935,23 @@ export default function InventoryTableClient({
         </TabsContent>
 
         {/* ========================================================= */}
-        {/* TAB 2: TRANSFER LOGS (OUTBOUND)                           */}
+        {/* TAB 2: WAREHOUSE DISPATCH LOGS                            */}
         {/* ========================================================= */}
         <TabsContent
           value="transfers"
           className="mt-4 px-5 sm:px-6 animate-in fade-in zoom-in-95 duration-300"
         >
           <div className="space-y-6 print:hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-border/50 gap-4">
-              <div className="space-y-1">
-                <h3 className="text-xl font-black uppercase tracking-tight text-foreground">
-                  Building Dispatch Logs
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-amber-50/30 dark:bg-slate-900/50 p-5 rounded-2xl border border-amber-200/50 dark:border-border/50 gap-4">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tight text-amber-700 dark:text-amber-500 flex items-center gap-2">
+                  <Building className="w-5 h-5" /> Warehouse Dispatch
                 </h3>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                  {filteredTransfers.length} Transfers Found
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
+                  {filteredTransfers.length} Dispatch Records
                 </p>
               </div>
-
-              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              <div className="flex items-center gap-3">
                 <Popover
                   open={openTransferDate}
                   onOpenChange={setOpenTransferDate}
@@ -881,7 +960,7 @@ export default function InventoryTableClient({
                     <Button
                       variant="outline"
                       className={cn(
-                        "flex-1 sm:w-[180px] justify-between h-11 rounded-xl font-bold bg-white dark:bg-slate-950 border-border/50 shadow-sm text-xs",
+                        "w-[160px] justify-between h-11 rounded-xl font-bold bg-white dark:bg-slate-950 border-border/50 shadow-sm text-xs",
                         !transferDate && "text-muted-foreground",
                       )}
                     >
@@ -917,12 +996,11 @@ export default function InventoryTableClient({
                           setOpenTransferDate(false);
                         }}
                       >
-                        <XCircle className="w-4 h-4 mr-2" /> Clear Date Filter
+                        <XCircle className="w-4 h-4 mr-2" /> Clear Date
                       </Button>
                     )}
                   </PopoverContent>
                 </Popover>
-
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -956,20 +1034,6 @@ export default function InventoryTableClient({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-blue-50/50 border border-blue-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-600/80 mb-1">
-                    Operational Transfers
-                  </p>
-                  <h4 className="text-3xl font-black text-blue-700">
-                    {filteredTransfers.length}{" "}
-                    <span className="text-sm opacity-70">Logs</span>
-                  </h4>
-                </div>
-                <div className="p-4 bg-blue-100 text-blue-600 rounded-2xl">
-                  <ArrowRightLeft className="w-6 h-6" />
-                </div>
-              </div>
               <div className="bg-amber-50/50 border border-amber-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-amber-600/80 mb-1">
@@ -988,7 +1052,7 @@ export default function InventoryTableClient({
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by feed type or destination..."
+                placeholder="Search by destination or feed..."
                 value={transferSearch}
                 onChange={(e) => {
                   setTransferSearch(e.target.value);
@@ -1001,25 +1065,22 @@ export default function InventoryTableClient({
             <div className="rounded-3xl border border-border/50 overflow-hidden bg-white dark:bg-slate-950 shadow-sm relative">
               <div className="overflow-auto max-h-[500px] custom-scrollbar">
                 <table className="w-full text-left text-sm whitespace-nowrap">
-                  <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900/80 shadow-sm border-b">
+                  <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 border-b">
                     <tr>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground">
                         Date Moved
                       </th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground">
                         Feed Type
                       </th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-amber-600 text-center">
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-amber-600 text-center">
                         Qty Dispatched
                       </th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground">
                         Destination
                       </th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground">
                         Handled By
-                      </th>
-                      <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right">
-                        Actions
                       </th>
                     </tr>
                   </thead>
@@ -1027,23 +1088,23 @@ export default function InventoryTableClient({
                     {paginatedTransfers.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={5}
                           className="px-6 py-12 text-center text-muted-foreground font-black uppercase tracking-widest opacity-40"
                         >
-                          No transfer records found.
+                          No dispatch records found.
                         </td>
                       </tr>
                     ) : (
                       paginatedTransfers.map((t) => (
                         <tr
                           key={t.id}
-                          className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors group"
+                          className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30"
                         >
-                          <td className="px-6 py-4 font-bold text-foreground">
+                          <td className="px-6 py-4 font-bold">
                             {format(new Date(t.allocatedDate), "MMM d, yyyy")}
                           </td>
                           <td className="px-6 py-4">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black border uppercase tracking-wider bg-slate-100 text-slate-700 border-slate-200">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black border uppercase tracking-wider bg-slate-100 text-slate-700">
                               {t.feedType}
                             </span>
                           </td>
@@ -1055,24 +1116,13 @@ export default function InventoryTableClient({
                               <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
                                 {t.farmName}
                               </span>
-                              <span className="text-xs font-black uppercase text-foreground flex items-center gap-1.5">
-                                <Building2 className="w-3 h-3 text-slate-400" />{" "}
+                              <span className="text-xs font-black uppercase text-foreground">
                                 {t.buildingName}
                               </span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                          <td className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase">
                             {t.staffName || "System Admin"}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setDeletingTransfer(t)}
-                              className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
                           </td>
                         </tr>
                       ))
@@ -1115,9 +1165,245 @@ export default function InventoryTableClient({
             )}
           </div>
         </TabsContent>
+
+        {/* ========================================================= */}
+        {/* TAB 3: INTERNAL FARM MOVEMENT                             */}
+        {/* ========================================================= */}
+        <TabsContent
+          value="internal"
+          className="mt-4 px-5 sm:px-6 animate-in fade-in zoom-in-95 duration-300"
+        >
+          <div className="space-y-6 print:hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-indigo-50/30 dark:bg-indigo-950/20 p-5 rounded-2xl border border-indigo-200/50 dark:border-indigo-900/50 gap-4">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tight text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+                  <ArrowRightLeft className="w-5 h-5" /> Farm Internal Logs
+                </h3>
+                <p className="text-[10px] font-bold text-indigo-600/70 dark:text-indigo-400/70 uppercase tracking-widest mt-1">
+                  Building to Building Transfers ({filteredInternal.length}{" "}
+                  Records)
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Popover
+                  open={openInternalDate}
+                  onOpenChange={setOpenInternalDate}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-[160px] justify-between h-11 rounded-xl font-bold bg-white dark:bg-slate-950 border-border/50 shadow-sm text-xs",
+                        !internalDate && "text-muted-foreground",
+                      )}
+                    >
+                      <span className="truncate flex items-center">
+                        <CalendarIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                        {internalDate
+                          ? format(internalDate, "MMM d, yyyy")
+                          : "Filter Date"}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-auto p-3 rounded-xl border-border/50 shadow-xl"
+                    align="end"
+                  >
+                    <Calendar
+                      mode="single"
+                      selected={internalDate}
+                      onSelect={(d) => {
+                        setInternalDate(d);
+                        setInternalPage(1);
+                        setOpenInternalDate(false);
+                      }}
+                    />
+                    {internalDate && (
+                      <Button
+                        variant="ghost"
+                        className="w-full mt-2 text-red-500 hover:text-red-600 hover:bg-red-50 font-bold"
+                        onClick={() => {
+                          setInternalDate(undefined);
+                          setInternalPage(1);
+                          setOpenInternalDate(false);
+                        }}
+                      >
+                        <XCircle className="w-4 h-4 mr-2" /> Clear Date
+                      </Button>
+                    )}
+                  </PopoverContent>
+                </Popover>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 rounded-xl hover:bg-secondary shrink-0 border border-border/50 bg-white dark:bg-slate-950 shadow-sm"
+                    >
+                      <MoreVertical className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-56 rounded-2xl p-2 shadow-2xl border-border/50 bg-card"
+                  >
+                    <DropdownMenuItem
+                      onClick={() => generatePDF("internal")}
+                      className="flex items-center gap-3 p-3 font-bold text-sm cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <Printer className="w-4 h-4 text-blue-600" /> Download PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => downloadCSV("internal")}
+                      className="flex items-center gap-3 p-3 font-bold text-sm cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <Download className="w-4 h-4 text-emerald-600" /> Download
+                      Excel (CSV)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-indigo-50/50 border border-indigo-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600/80 mb-1">
+                    Total Sacks Moved Internally
+                  </p>
+                  <h4 className="text-3xl font-black text-indigo-700">
+                    {formatSacks(grandTotalInternal)}
+                  </h4>
+                </div>
+                <div className="p-4 bg-indigo-100 text-indigo-600 rounded-2xl">
+                  <ArrowRightLeft className="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search source or destination..."
+                value={internalSearch}
+                onChange={(e) => {
+                  setInternalSearch(e.target.value);
+                  setInternalPage(1);
+                }}
+                className="pl-9 h-11 rounded-xl bg-secondary/50 border-border/50 text-sm font-bold"
+              />
+            </div>
+
+            <div className="rounded-3xl border border-border/50 overflow-hidden bg-white dark:bg-slate-950 shadow-sm relative">
+              <div className="overflow-auto max-h-[500px] custom-scrollbar">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 border-b">
+                    <tr>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground">
+                        Date Moved
+                      </th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground">
+                        Feed Type
+                      </th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-indigo-600 text-center">
+                        Qty Moved
+                      </th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-rose-600">
+                        From Building
+                      </th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-emerald-600">
+                        To Building
+                      </th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground">
+                        User
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {paginatedInternal.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-6 py-12 text-center text-muted-foreground font-black uppercase tracking-widest opacity-40"
+                        >
+                          No internal transfers found.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedInternal.map((t) => (
+                        <tr
+                          key={t.id}
+                          className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30"
+                        >
+                          <td className="px-6 py-4 font-bold">
+                            {format(new Date(t.allocatedDate), "MMM d, yyyy")}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black border uppercase tracking-wider bg-slate-100 text-slate-700">
+                              {t.feedType}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-black text-indigo-600 text-center text-lg bg-indigo-50/30 dark:bg-indigo-900/10">
+                            {formatSacks(t.allocatedQuantity)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-xs font-black uppercase text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 px-2 py-1 rounded">
+                              {t.sourceBuilding || "Unknown"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-xs font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded">
+                              {t.buildingName}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase">
+                            {t.staffName || "System Admin"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {totalInternalPages > 1 && (
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                  Page {internalPage} of {totalInternalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setInternalPage((p) => Math.max(1, p - 1))}
+                    disabled={internalPage === 1}
+                    className="h-8 rounded-lg px-3 font-bold"
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setInternalPage((p) =>
+                        Math.min(totalInternalPages, p + 1),
+                      )
+                    }
+                    disabled={internalPage === totalInternalPages}
+                    className="h-8 rounded-lg px-3 font-bold"
+                  >
+                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
 
-      {/* 1. DELETE DELIVERY MODAL */}
+      {/* MODALS */}
       <Dialog
         open={!!deletingDelivery}
         onOpenChange={(open) => !open && setDeletingDelivery(null)}
@@ -1170,57 +1456,6 @@ export default function InventoryTableClient({
         </DialogContent>
       </Dialog>
 
-      {/* 2. DELETE TRANSFER MODAL */}
-      <Dialog
-        open={!!deletingTransfer}
-        onOpenChange={(open) => !open && setDeletingTransfer(null)}
-      >
-        <DialogContent className="max-w-md rounded-[2rem] p-6 border-amber-100">
-          <div className="flex flex-col items-center text-center space-y-4">
-            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-2">
-              <ArrowRightLeft className="w-8 h-8" />
-            </div>
-            <DialogTitle className="text-xl font-black">
-              Reverse this Transfer?
-            </DialogTitle>
-            <p className="text-sm text-muted-foreground">
-              Are you sure you want to delete the transfer of{" "}
-              <strong className="text-slate-900">
-                {deletingTransfer?.allocatedQuantity} sacks of{" "}
-                {deletingTransfer?.feedType}
-              </strong>
-              ?
-            </p>
-            <div className="bg-blue-50 text-blue-700 p-4 rounded-xl text-xs font-bold w-full text-left border border-blue-200">
-              This will remove the feeds from {deletingTransfer?.buildingName}{" "}
-              and return them to the Main Warehouse inventory.
-            </div>
-            <DialogFooter className="w-full flex sm:justify-between gap-3 pt-4 border-t">
-              <Button
-                variant="outline"
-                className="flex-1 rounded-xl h-11 font-bold"
-                onClick={() => setDeletingTransfer(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="flex-1 rounded-xl h-11 font-black bg-amber-600 hover:bg-amber-700 text-white"
-                onClick={handleDeleteTransfer}
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <ArrowRightLeft className="w-4 h-4 mr-2" />
-                )}{" "}
-                Reverse Transfer
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* 3. EDIT DELIVERY MODAL */}
       <Dialog
         open={!!editingDelivery}
         onOpenChange={(open) => !open && setEditingDelivery(null)}
@@ -1234,7 +1469,6 @@ export default function InventoryTableClient({
               Fix typos or update incorrect amounts safely.
             </p>
           </div>
-
           <form onSubmit={handleEditSubmit} className="p-6 space-y-6 bg-card">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-1.5">
@@ -1320,7 +1554,6 @@ export default function InventoryTableClient({
                 />
               </div>
             </div>
-
             <DialogFooter className="flex justify-end gap-3 pt-4 border-t border-border/50">
               <Button
                 type="button"

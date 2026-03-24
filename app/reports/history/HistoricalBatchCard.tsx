@@ -24,8 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-
-// Import your existing timeline button to place inside the dropdown!
 import HistoryTimelineButton from "./HistoryTimelineButton";
 
 const formatMoney = (amount: number) =>
@@ -146,15 +144,7 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
       formatMoneyPDF(e.amount),
     ]);
 
-    // Add Shared Expense line if it exists
-    if (batch.pdfPayload.sharedExpenseShare > 0) {
-      expRows.push([
-        "-",
-        "Farm Shared Expenses",
-        "Pro-rated share of active days",
-        formatMoneyPDF(batch.pdfPayload.sharedExpenseShare),
-      ]);
-    }
+    // ---> Duplicate summary row completely removed from here! <---
 
     autoTable(doc, {
       startY: expY + 20,
@@ -225,7 +215,6 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
 
             <DropdownMenuSeparator className="my-1" />
 
-            {/* The existing timeline button is perfectly injected here! */}
             <HistoryTimelineButton load={batch} />
           </DropdownMenuContent>
         </DropdownMenu>

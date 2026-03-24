@@ -11,8 +11,9 @@ import {
   CalendarIcon,
   Info,
   ChevronDown,
-  CheckCircle2,
   AlertCircle,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfDay } from "date-fns";
@@ -35,6 +36,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { FormattedNumberInput } from "@/components/ui/FormattedNumberInput";
 import { Input } from "@/components/ui/input";
 
@@ -65,11 +74,17 @@ export default function AddExpenseModal({
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // States
+  // Combobox & Date States
   const [farmId, setFarmId] = useState("");
+  const [openFarm, setOpenFarm] = useState(false);
+
   const [loadId, setLoadId] = useState("");
+  const [openLoad, setOpenLoad] = useState(false);
+
   const [expenseType, setExpenseType] = useState("");
+
   const [expenseDate, setExpenseDate] = useState<Date | undefined>(new Date());
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -190,9 +205,8 @@ export default function AddExpenseModal({
         mounted &&
         createPortal(
           <div className="fixed inset-0 z-100 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            {/* ---> THE FIX: Clean modal container with overflow-hidden and flex-col <--- */}
             <div className="fixed z-101 w-full max-w-lg border border-border/50 bg-background shadow-2xl sm:rounded-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-              {/* ---> FIXED HEADER (Never scrolls) <--- */}
+              {/* HEADER */}
               <div className="flex justify-between items-center p-6 pb-5 border-b border-border/50 bg-slate-50/50 dark:bg-slate-900/20 z-10 shrink-0">
                 <div>
                   <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
@@ -211,44 +225,84 @@ export default function AddExpenseModal({
                 </button>
               </div>
 
-              {/* ---> SCROLLABLE BODY (Only this part scrolls) <--- */}
+              {/* SCROLLABLE BODY */}
               <div className="p-6 overflow-y-auto custom-scrollbar">
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div className="grid grid-cols-1 gap-4">
+                    {/* ---> SEARCHABLE FARM COMBOBOX <--- */}
                     <div className="space-y-2">
                       <label className="text-sm font-semibold">
                         Select Farm <span className="text-red-500">*</span>
                       </label>
-                      <Select
-                        value={farmId}
-                        onValueChange={(val) => {
-                          setFarmId(val);
-                          setLoadId("");
-                        }}
-                      >
-                        <SelectTrigger className="w-full h-[46px] rounded-xl border border-input bg-background px-4 py-2 text-sm font-normal focus:ring-red-500 flex items-center justify-between shadow-sm">
-                          <SelectValue placeholder="-- Farm --" />
-                        </SelectTrigger>
-                        <SelectContent className="z-200">
-                          {farms.map((farm) => (
-                            <SelectItem key={farm.id} value={String(farm.id)}>
-                              {farm.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={openFarm} onOpenChange={setOpenFarm}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={openFarm}
+                            className={cn(
+                              "w-full h-11 justify-between rounded-xl font-normal bg-background border-input shadow-sm",
+                              !farmId && "text-muted-foreground",
+                            )}
+                          >
+                            <span className="truncate uppercase font-bold text-xs tracking-wider">
+                              {farmId
+                                ? farms.find((f) => String(f.id) === farmId)
+                                    ?.name
+                                : "-- Select Farm --"}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-200">
+                          <Command>
+                            <CommandInput placeholder="Search farm..." />
+                            <CommandList className="max-h-[200px]">
+                              <CommandEmpty>No farm found.</CommandEmpty>
+                              <CommandGroup>
+                                {farms.map((farm) => (
+                                  <CommandItem
+                                    key={farm.id}
+                                    value={farm.name}
+                                    onSelect={() => {
+                                      setFarmId(String(farm.id));
+                                      setLoadId(""); // Reset building
+                                      setOpenFarm(false);
+                                    }}
+                                    className="font-bold text-xs uppercase tracking-wider cursor-pointer py-2.5"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4 text-red-600",
+                                        farmId === String(farm.id)
+                                          ? "opacity-100"
+                                          : "opacity-0",
+                                      )}
+                                    />
+                                    {farm.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
 
+                    {/* ---> REPAIRED DATE PICKER <--- */}
                     <div className="space-y-2">
                       <label className="text-sm font-semibold">
                         Expense Date <span className="text-red-500">*</span>
                       </label>
-                      <Popover>
+                      <Popover
+                        open={isCalendarOpen}
+                        onOpenChange={setIsCalendarOpen}
+                      >
                         <PopoverTrigger asChild>
                           <Button
                             type="button"
                             className={cn(
-                              "w-full h-[46px] rounded-xl border border-input bg-background px-4 py-2 text-sm font-normal text-foreground hover:bg-background focus:ring-red-500 flex items-center justify-start text-left shadow-sm transition-none",
+                              "w-full h-11 rounded-xl border border-input bg-background px-4 py-2 text-sm font-bold uppercase tracking-wider text-foreground hover:bg-background focus:ring-red-500 flex items-center justify-start text-left shadow-sm",
                               !expenseDate && "text-muted-foreground",
                             )}
                           >
@@ -265,7 +319,13 @@ export default function AddExpenseModal({
                           <Calendar
                             mode="single"
                             selected={expenseDate}
-                            onSelect={setExpenseDate}
+                            onSelect={(date) => {
+                              if (date) {
+                                setExpenseDate(date);
+                                setIsCalendarOpen(false); // Auto closes!
+                              }
+                            }}
+                            disabled={(date) => date > new Date()} // Blocks Future Dates!
                             initialFocus
                           />
                         </PopoverContent>
@@ -402,29 +462,69 @@ export default function AddExpenseModal({
                         </div>
                       </div>
 
+                      {/* ---> SEARCHABLE TARGET BUILDING COMBOBOX <--- */}
                       {!isSharedExpense && canSave && (
                         <div className="space-y-2 p-4 bg-emerald-50/50 dark:bg-emerald-950/10 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
                           <label className="text-sm font-semibold text-emerald-700 dark:text-emerald-500">
                             Which building is this for?{" "}
                             <span className="text-red-500">*</span>
                           </label>
-                          <Select value={loadId} onValueChange={setLoadId}>
-                            <SelectTrigger className="w-full h-11 rounded-xl bg-background border-emerald-200 focus:ring-emerald-500">
-                              <SelectValue placeholder="-- Select Target Building --" />
-                            </SelectTrigger>
-                            <SelectContent className="z-200">
-                              <SelectGroup>
-                                {eligibleLoads.map((load, index) => (
-                                  <SelectItem
-                                    key={`load-${load.id || index}`}
-                                    value={String(load.id)}
-                                  >
-                                    {load.buildingName} (Active Flock)
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            </SelectContent>
-                          </Select>
+
+                          <Popover open={openLoad} onOpenChange={setOpenLoad}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openLoad}
+                                className={cn(
+                                  "w-full h-11 justify-between rounded-xl font-normal bg-background border-emerald-200 shadow-sm",
+                                  !loadId && "text-muted-foreground",
+                                )}
+                              >
+                                <span className="truncate uppercase font-bold text-xs tracking-wider">
+                                  {loadId
+                                    ? eligibleLoads.find(
+                                        (l) => String(l.id) === loadId,
+                                      )?.buildingName + " (Active Flock)"
+                                    : "-- Select Target Building --"}
+                                </span>
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-200">
+                              <Command>
+                                <CommandInput placeholder="Search active building..." />
+                                <CommandList className="max-h-[200px]">
+                                  <CommandEmpty>
+                                    No active building found.
+                                  </CommandEmpty>
+                                  <CommandGroup>
+                                    {eligibleLoads.map((load) => (
+                                      <CommandItem
+                                        key={load.id}
+                                        value={load.buildingName}
+                                        onSelect={() => {
+                                          setLoadId(String(load.id));
+                                          setOpenLoad(false);
+                                        }}
+                                        className="font-bold text-xs uppercase tracking-wider cursor-pointer py-2.5"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4 text-emerald-600",
+                                            loadId === String(load.id)
+                                              ? "opacity-100"
+                                              : "opacity-0",
+                                          )}
+                                        />
+                                        {load.buildingName} (Active Flock)
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       )}
                     </div>

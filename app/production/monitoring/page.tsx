@@ -46,6 +46,7 @@ export default async function DailyMonitoringPage(props: {
       buildingName: buildings.name,
       farmName: farms.name,
       isActive: loads.isActive,
+      loadDate: loads.loadDate, // <--- ADDED: Needed for the Date Blocker in the Modal
     })
     .from(loads)
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
@@ -92,7 +93,7 @@ export default async function DailyMonitoringPage(props: {
       farmName: farms.name,
       buildingName: buildings.name,
       loadId: loads.id,
-      loadName: loads.name, // <--- THE FIX: Grab the actual Batch Name!
+      loadName: loads.name,
     })
     .from(dailyRecords)
     .innerJoin(loads, eq(dailyRecords.loadId, loads.id))
@@ -114,7 +115,6 @@ export default async function DailyMonitoringPage(props: {
         )
       : [];
 
-  // THE FIX: Format Available Loads as { id, name } pairs!
   const filteredInfra = infrastructure.filter((i) => {
     if (selectedFarm && selectedFarm !== "all" && i.farmName !== selectedFarm)
       return false;
@@ -134,7 +134,7 @@ export default async function DailyMonitoringPage(props: {
 
   const availableLoads = Array.from(loadMap.entries())
     .map(([id, name]) => ({ id, name }))
-    .sort((a, b) => b.id - a.id); // Sort newest loads first
+    .sort((a, b) => b.id - a.id);
 
   // 3. BUILD DATABASE QUERY CONDITIONS
   const filterConditions = [];
@@ -166,7 +166,7 @@ export default async function DailyMonitoringPage(props: {
     .select({
       id: dailyRecords.id,
       loadId: dailyRecords.loadId,
-      loadName: loads.name, // <--- THE FIX: Grab the Batch Name for the Table Rows!
+      loadName: loads.name,
       date: dailyRecords.recordDate,
       mortalityAm: dailyRecords.mortalityAm,
       mortalityPm: dailyRecords.mortalityPm,
@@ -212,7 +212,7 @@ export default async function DailyMonitoringPage(props: {
         history={history}
         farms={uniqueFarmNames}
         buildings={filteredBuildings}
-        loads={availableLoads} // Passed correctly to Client!
+        loads={availableLoads}
         totalPages={totalPages}
         currentPage={currentPage}
         userRole={userRole}

@@ -20,7 +20,9 @@ import {
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// ---> NEW: BROUGHT IN THE FRACTION FORMATTER FOR CONSISTENCY <---
+// ---> NEW: Import the Transfer Menu Client Component <---
+import BuildingTransferMenu from "./BuildingTransferMenu";
+
 const formatSacks = (val: number | string | null | undefined) => {
   const num = Number(val);
   if (!num || num === 0) return "0";
@@ -66,25 +68,33 @@ export default async function BuildingStocksPage() {
   const loadsWithFeeds = activeLoadsRaw.map((load) => {
     const loadFeeds = allAllocations.filter((a) => a.loadId === load.id);
 
-    // Sum up the remaining sacks grouped by feed type (Starter, Grower, etc.)
+    // Group for the visual display (sums up identical feed types)
     const feedStock = loadFeeds.reduce(
       (acc, curr) => {
         const type = curr.feedType || "UNKNOWN";
-        // ---> FIX: Wrapped curr.remainingInBuilding in Number()! <---
         acc[type] = (acc[type] || 0) + Number(curr.remainingInBuilding);
         return acc;
       },
       {} as Record<string, number>,
     );
 
-    // Filter out empty stocks so we only show what they actually have
+    // Keep the raw allocations for the Transfer Menu (needs the exact database IDs)
+    const rawActiveStocks = loadFeeds
+      .filter((f) => Number(f.remainingInBuilding) > 0)
+      .map((f) => ({
+        id: f.id,
+        type: f.feedType || "UNKNOWN",
+        qty: Number(f.remainingInBuilding),
+      }));
+
+    // Filter out empty stocks for UI
     const activeStocks = Object.entries(feedStock).filter(
       ([_, quantity]) => quantity > 0,
     );
 
     const totalSacks = activeStocks.reduce((sum, [_, qty]) => sum + qty, 0);
 
-    return { ...load, activeStocks, totalSacks };
+    return { ...load, activeStocks, rawActiveStocks, totalSacks };
   });
 
   // 4. Group by Farm Name for a clean UI layout
@@ -128,7 +138,7 @@ export default async function BuildingStocksPage() {
         </div>
       ) : (
         <Tabs defaultValue={farmNames[0]} className="w-full">
-          {/* ---> UPGRADED HORIZONTALLY SCROLLABLE TABS LIST <--- */}
+          {/* HORIZONTALLY SCROLLABLE TABS LIST */}
           <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
             <TabsList className="flex h-auto w-max items-center justify-start gap-2 bg-transparent p-0 border-none">
               {farmNames.map((farmName) => (
@@ -145,7 +155,7 @@ export default async function BuildingStocksPage() {
             </TabsList>
           </div>
 
-          {/* ---> TAB CONTENT (THE BUILDINGS GRID) <--- */}
+          {/* TAB CONTENT (THE BUILDINGS GRID) */}
           {farmNames.map((farmName) => {
             const buildingsInFarm = groupedByFarm[farmName];
 
@@ -175,32 +185,53 @@ export default async function BuildingStocksPage() {
                       >
                         {/* Card Header */}
                         <div className="bg-slate-50 dark:bg-slate-900/50 p-5 border-b border-border/50">
-                          <div className="flex justify-between items-start gap-4">
-                            <div>
-                              <h3 className="text-lg font-black uppercase text-foreground">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="min-w-0 pr-2">
+                              <h3 className="text-lg font-black uppercase text-foreground truncate">
                                 {building.buildingName}
                               </h3>
                               <p className="text-xs font-bold text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                                <span className="bg-white dark:bg-slate-950 border border-border/50 px-2 py-0.5 rounded shadow-sm">
+                                <span className="bg-white dark:bg-slate-950 border border-border/50 px-2 py-0.5 rounded shadow-sm truncate max-w-[120px] sm:max-w-[150px]">
                                   {building.name || "Unnamed Batch"}
                                 </span>
                               </p>
                             </div>
-                            <div className="text-right">
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                                Total Sacks
-                              </p>
-                              <p
-                                className={cn(
-                                  "text-xl font-black",
-                                  building.totalSacks > 0
-                                    ? "text-emerald-600"
-                                    : "text-red-500",
-                                )}
-                              >
-                                {/* ---> UPGRADED TOTAL SACKS <--- */}
-                                {formatSacks(building.totalSacks)}
-                              </p>
+
+                            {/* THE MENU & SACKS HEADER */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <div className="text-right mr-1">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                  Total Sacks
+                                </p>
+                                <p
+                                  className={cn(
+                                    "text-xl font-black",
+                                    building.totalSacks > 0
+                                      ? "text-emerald-600"
+                                      : "text-red-500",
+                                  )}
+                                >
+                                  {formatSacks(building.totalSacks)}
+                                </p>
+                              </div>
+
+                              {/* ---> ADDED TRANSFER MENU <--- */}
+                              <BuildingTransferMenu
+                                farmName={farmName}
+                                sourceBuildingName={building.buildingName}
+                                activeStocks={building.rawActiveStocks}
+                                otherActiveLoads={activeLoadsRaw
+                                  .filter(
+                                    (l) =>
+                                      l.farmName === farmName &&
+                                      l.id !== building.id,
+                                  )
+                                  .map((l) => ({
+                                    id: l.id,
+                                    name: l.name || "Unnamed Batch",
+                                    building: l.buildingName,
+                                  }))}
+                              />
                             </div>
                           </div>
 
@@ -280,7 +311,6 @@ export default async function BuildingStocksPage() {
                                               : "text-foreground",
                                           )}
                                         >
-                                          {/* ---> UPGRADED INDIVIDUAL SACKS <--- */}
                                           {formatSacks(quantity)} sacks
                                         </span>
                                       </div>

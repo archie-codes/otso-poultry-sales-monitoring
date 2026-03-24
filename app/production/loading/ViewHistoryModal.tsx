@@ -86,13 +86,13 @@ export default function ViewHistoryModal({
               {load.buildingName} • {load.name}
             </p>
           </div>
-          <Button
+          {/* <Button
             onClick={handleExport}
             disabled={loading || timeline.length === 0}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-10 shadow-sm transition-all"
           >
             <Download className="w-4 h-4 mr-2" /> Export CSV
-          </Button>
+          </Button> */}
         </div>
 
         {/* TIMELINE BODY - FIXED HEIGHT FOR 3 ITEMS */}

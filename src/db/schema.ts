@@ -1,4 +1,3 @@
-// db/schema.ts
 import {
   pgTable,
   serial,
@@ -234,7 +233,7 @@ export const feedAllocations = pgTable("feed_allocations", {
     .references(() => feedDeliveries.id)
     .notNull(),
   loadId: integer("load_id")
-    .references(() => loads.id, { onDelete: "cascade" }) // (assuming loads table exists)
+    .references(() => loads.id, { onDelete: "cascade" })
     .notNull(),
 
   allocatedDate: date("allocated_date").notNull(),
@@ -253,5 +252,12 @@ export const feedAllocations = pgTable("feed_allocations", {
   }).notNull(),
 
   recordedBy: integer("recorded_by").references(() => users.id),
+
+  // =======================================================
+  // ---> NEW: COLUMNS FOR BUILDING-TO-BUILDING HISTORY <---
+  // =======================================================
+  isInternalTransfer: boolean("is_internal_transfer").default(false).notNull(),
+  sourceBuilding: varchar("source_building", { length: 255 }),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

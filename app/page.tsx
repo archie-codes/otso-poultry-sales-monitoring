@@ -234,7 +234,7 @@ export default async function Dashboard() {
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Total Active Capital
             </span>
-            <span className="text-xl font-black text-indigo-500">
+            <span className="text-lg font-black text-indigo-500">
               <AnimatedCounter value={totalCapital} formatType="peso" />
             </span>
           </div>
@@ -289,7 +289,7 @@ export default async function Dashboard() {
             className="bg-card border border-border/50 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="flex justify-between items-start">
-              <div className={`p-3 rounded-2xl ${stat.bg} ${stat.color}`}>
+              <div className={`p-3 rounded-xl ${stat.bg} ${stat.color}`}>
                 <stat.icon className="w-5 h-5" />
               </div>
               {stat.trend !== null && (
@@ -311,10 +311,10 @@ export default async function Dashboard() {
               )}
             </div>
             <div className="mt-4">
-              <p className="text-xl font-black tracking-tight text-foreground">
+              <p className="text-lg font-black tracking-tight text-foreground">
                 <AnimatedCounter value={stat.value} formatType={stat.format} />
               </p>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mt-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">
                 {stat.label}
               </p>
             </div>
@@ -412,7 +412,7 @@ export default async function Dashboard() {
                 <AnimatedCounter value={allLoads.length} />
               </span>
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Tot. Loads
+                Total Loads
               </span>
             </div>
             <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-secondary/30 border border-border/50">
