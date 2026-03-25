@@ -197,7 +197,7 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-10 w-10 rounded-xl hover:bg-slate-200 bg-white shadow-sm border border-border/50 shrink-0"
+              className="p-2 text-slate-600 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors outline-none"
             >
               <MoreVertical className="h-5 w-5 text-slate-600" />
             </Button>

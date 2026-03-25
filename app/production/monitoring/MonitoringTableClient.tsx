@@ -357,7 +357,7 @@ export default function MonitoringTableClient({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 rounded-xl hover:bg-secondary shrink-0 border border-border/50 bg-white dark:bg-slate-950 shadow-sm"
+                  className="p-2 text-slate-600 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors outline-none"
                 >
                   <MoreVertical className="h-5 w-5" />
                 </Button>
