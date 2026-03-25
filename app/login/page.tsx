@@ -159,7 +159,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-12 inline-flex items-center justify-center rounded-xl text-sm font-bold text-white transition-all duration-300 bg-linear-to-r from-blue-600 to-green-500 hover:from-blue-700 hover:to-green-600 shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
+              className="w-full h-12 inline-flex items-center justify-center rounded-xl text-sm font-bold text-white transition-all duration-300 bg-linear-to-r from-blue-600 to-green-500 hover:from-blue-700 hover:to-green-600 shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] disabled:opacity-70 disabled:hover:translate-y-0"
             >
               {loading ? "Authenticating..." : "Sign In to Dashboard"}
             </button>

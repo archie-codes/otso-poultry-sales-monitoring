@@ -49,7 +49,7 @@ const HenIcon = ({ className }: { className?: string }) => {
         alt="Hen"
         fill
         sizes="18px"
-        className="object-contain brightness-0 invert"
+        className="object-contain brightness-0 invert opacity-90"
       />
     </span>
   );
@@ -165,10 +165,8 @@ export default function Navbar({
 }) {
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
-
   const [isOpen, setIsOpen] = useState(false);
 
-  // ---> UPGRADED DYNAMIC MENU STATE <---
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     Settings: pathname.startsWith("/settings"),
     "Feed Inventory": pathname.startsWith("/inventory"),
@@ -203,22 +201,23 @@ export default function Navbar({
 
           <SheetContent
             side="left"
-            className="w-[280px] p-0 flex flex-col border-r border-border/40 bg-linear-to-b from-green-700 via-green-800 to-green-950 text-blue-50"
+            className="w-[280px] p-0 flex flex-col border-r border-emerald-700/50 bg-linear-to-br from-green-800 via-emerald-600 to-green-900 animate-bg-gradient text-emerald-50"
           >
             <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
 
             {/* ---> BRAND HEADER (Matches Sidebar) <--- */}
-            <div className="h-16 flex items-center px-6 border-b border-white/10 shrink-0 overflow-hidden bg-black/10">
+            <div className="h-16 flex items-center px-6 border-b border-white/20 shrink-0 overflow-hidden bg-black/10 backdrop-blur-sm">
               <div className="relative h-8 w-8 shrink-0 flex items-center justify-center mr-3">
                 <Image
                   src="/logo.png"
                   alt="Otso Poultry Logo"
                   fill
+                  // NO INVERT OR BRIGHTNESS FILTER HERE! True colors shine through.
                   className="object-contain drop-shadow-md"
                   priority
                 />
               </div>
-              <span className="font-black text-lg tracking-tight bg-linear-to-r from-white/80 to-white/80 bg-clip-text text-transparent whitespace-nowrap">
+              <span className="font-black text-lg tracking-tight text-white whitespace-nowrap drop-shadow-md">
                 Otso Poultry
               </span>
             </div>
@@ -227,13 +226,12 @@ export default function Navbar({
             <div className="flex-1 py-6 flex flex-col gap-6 px-4 overflow-y-auto custom-scrollbar overflow-x-hidden">
               {navGroups.map((group) => (
                 <div key={group.label} className="flex flex-col gap-1 w-full">
-                  <h3 className="px-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500/70 mb-1 truncate transition-opacity duration-300">
+                  <h3 className="px-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200 mb-1 truncate transition-opacity duration-300">
                     {group.label}
                   </h3>
 
                   <div className="px-1 flex flex-col gap-1">
                     {group.items.map((item) => {
-                      // IF THIS ITEM HAS SUB-ITEMS
                       if (item.subItems) {
                         const isMenuOpen = openMenus[item.name];
                         const isAnySubActive = item.subItems.some(
@@ -252,15 +250,17 @@ export default function Navbar({
                               className={cn(
                                 "flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group w-full outline-none border border-transparent",
                                 isAnySubActive
-                                  ? "bg-white/10 text-white font-bold border-white/5"
-                                  : "text-blue-100/70 hover:bg-white/5 hover:text-white font-medium",
+                                  ? "bg-white/20 text-white font-bold border-white/10 shadow-sm backdrop-blur-md"
+                                  : "text-emerald-50 hover:bg-white/10 hover:text-white font-medium",
                               )}
                             >
                               <div className="flex items-center gap-3">
                                 <item.icon
                                   className={cn(
                                     "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
-                                    isAnySubActive ? "text-emerald-400" : "",
+                                    isAnySubActive
+                                      ? "text-white"
+                                      : "opacity-90",
                                   )}
                                 />
                                 <span className="text-sm truncate">
@@ -269,17 +269,15 @@ export default function Navbar({
                               </div>
                               <ChevronDown
                                 className={cn(
-                                  "h-4 w-4 transition-transform duration-200 opacity-50",
-                                  isMenuOpen
-                                    ? "rotate-180 text-emerald-400"
-                                    : "",
+                                  "h-4 w-4 transition-transform duration-200 opacity-70",
+                                  isMenuOpen ? "rotate-180 text-white" : "",
                                 )}
                               />
                             </button>
 
                             {/* Sub Items */}
                             {isMenuOpen && (
-                              <div className="flex flex-col gap-1 pl-4 mt-1 border-l border-white/10 ml-6 animate-in slide-in-from-top-2 fade-in duration-200">
+                              <div className="flex flex-col gap-1 pl-4 mt-1 border-l-2 border-white/20 ml-6 animate-in slide-in-from-top-2 fade-in duration-200">
                                 {item.subItems.map((subItem) => {
                                   const isStrictActive =
                                     pathname === subItem.href;
@@ -291,8 +289,8 @@ export default function Navbar({
                                       className={cn(
                                         "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group",
                                         isStrictActive
-                                          ? "bg-emerald-500/20 text-emerald-400 font-bold"
-                                          : "text-blue-100/60 hover:text-white text-sm font-medium hover:bg-white/5",
+                                          ? "bg-white/15 text-white font-bold shadow-sm"
+                                          : "text-emerald-100/80 hover:text-white text-sm font-medium hover:bg-white/10",
                                       )}
                                     >
                                       <subItem.icon className="h-3.5 w-3.5" />
@@ -325,11 +323,16 @@ export default function Navbar({
                           className={cn(
                             "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative border",
                             isStrictActive
-                              ? "bg-linear-to-r from-emerald-500/20 to-blue-500/20 text-emerald-400 font-bold border-emerald-500/30 shadow-lg shadow-emerald-900/20"
-                              : "border-transparent text-blue-100/70 hover:bg-white/5 hover:text-white font-medium",
+                              ? "bg-white/20 text-white font-bold border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.1)] backdrop-blur-md"
+                              : "border-transparent text-emerald-50 hover:bg-white/10 hover:text-white font-medium",
                           )}
                         >
-                          <item.icon className="h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                          <item.icon
+                            className={cn(
+                              "h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110",
+                              isStrictActive ? "text-white" : "opacity-90",
+                            )}
+                          />
                           <span className="text-sm truncate">{item.name}</span>
                         </Link>
                       );
@@ -340,13 +343,13 @@ export default function Navbar({
             </div>
 
             {/* ---> FOOTER <--- */}
-            <div className="p-3 border-t border-white/10 bg-black/20 shrink-0">
+            <div className="p-3 border-t border-white/20 bg-black/10 shrink-0 backdrop-blur-md">
               <button
                 onClick={() => {
                   setIsOpen(false);
                   signOut({ callbackUrl: "/login" });
                 }}
-                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-blue-200/60 hover:bg-red-500/20 hover:text-red-400 font-medium transition-colors group"
+                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-emerald-100/80 hover:bg-red-500/30 hover:text-red-100 font-medium transition-colors group border border-transparent hover:border-red-500/50"
               >
                 <LogOut className="h-5 w-5 shrink-0 group-hover:-translate-x-1 transition-transform" />
                 <span className="text-sm truncate">Log out securely</span>
@@ -384,7 +387,7 @@ export default function Navbar({
             </span>
           </div>
 
-          <div className="h-9 w-9 rounded-full bg-linear-to-tr from-emerald-500 to-blue-500 flex items-center justify-center text-white shadow-md font-bold text-sm cursor-pointer hover:opacity-90 transition-opacity overflow-hidden relative border border-border/50">
+          <div className="h-9 w-9 rounded-full bg-emerald-600 dark:bg-emerald-700 flex items-center justify-center text-white shadow-md font-bold text-sm cursor-pointer hover:opacity-90 transition-opacity overflow-hidden relative border border-border/50">
             {imageUrl ? (
               <Image
                 src={imageUrl}

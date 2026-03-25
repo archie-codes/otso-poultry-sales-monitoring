@@ -25,7 +25,10 @@ import {
   Banknote,
   TrendingUp,
   ArrowRight,
-  Layers, // <--- Imported for the "Total Loads" icon
+  Layers,
+  Warehouse,
+  AlertCircle,
+  PlusCircle,
 } from "lucide-react";
 import {
   FinancialAreaChart,
@@ -60,7 +63,9 @@ export default async function Dashboard() {
         id: loads.id,
         farmId: farms.id,
         farmName: farms.name,
+        buildingId: buildings.id, // Needed for Fleet Overview
         buildingName: buildings.name,
+        loadName: loads.name, // Needed for Fleet Overview
         loadDate: loads.loadDate,
         harvestDate: loads.harvestDate,
         quantity: loads.actualQuantityLoad,
@@ -104,7 +109,78 @@ export default async function Dashboard() {
     return sum + Math.max(0, load.quantity - loadMortality - harvestedBirds);
   }, 0);
 
-  // Trend Data (Last 6 Months)
+  // --- FLEET OVERVIEW DATA STRUCTURE ---
+  const allInfra = await db
+    .select({
+      farmId: farms.id,
+      farmName: farms.name,
+      buildingId: buildings.id,
+      buildingName: buildings.name,
+    })
+    .from(buildings)
+    .innerJoin(farms, eq(buildings.farmId, farms.id));
+
+  const fleetData = allInfra.reduce(
+    (acc, infra) => {
+      if (!acc[infra.farmName]) {
+        acc[infra.farmName] = { farmId: infra.farmId, buildings: [] };
+      }
+
+      const activeBatch = activeLoads.find(
+        (l) => l.buildingId === infra.buildingId,
+      );
+      let currentLive = 0;
+      let currentMortality = 0;
+      let ageInDays = 0;
+
+      if (activeBatch) {
+        const batchRecords = allDailyRecords.filter(
+          (r) => r.loadId === activeBatch.id,
+        );
+        currentMortality = batchRecords.reduce(
+          (sum, r) => sum + Number(r.mortality),
+          0,
+        );
+        currentLive = Math.max(
+          0,
+          (Number(activeBatch.quantity) || 0) - currentMortality,
+        );
+
+        const loadDateObj = new Date(activeBatch.loadDate);
+        loadDateObj.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        ageInDays = Math.max(
+          1,
+          Math.floor(
+            (today.getTime() - loadDateObj.getTime()) / (1000 * 60 * 60 * 24),
+          ),
+        );
+      }
+
+      acc[infra.farmName].buildings.push({
+        buildingId: infra.buildingId,
+        buildingName: infra.buildingName,
+        activeBatch,
+        liveBirds: currentLive,
+        mortality: currentMortality,
+        ageInDays,
+      });
+
+      return acc;
+    },
+    {} as Record<string, { farmId: number; buildings: any[] }>,
+  );
+
+  Object.keys(fleetData).forEach((farmName) => {
+    fleetData[farmName].buildings.sort((a, b) =>
+      a.buildingName.localeCompare(b.buildingName, undefined, {
+        numeric: true,
+      }),
+    );
+  });
+
+  // --- TREND DATA (Last 6 Months) ---
   const today = new Date();
   const monthWindow = Array.from({ length: 6 }, (_, index) => {
     const date = new Date(
@@ -154,7 +230,7 @@ export default async function Dashboard() {
         100
       : 0;
 
-  // Donut Chart Data
+  // --- DONUT CHART DATA ---
   const categoryMap = new Map<string, number>();
   for (const expense of allExpenses) {
     const amount = Number(expense.amount);
@@ -179,38 +255,7 @@ export default async function Dashboard() {
     "bg-purple-500",
   ];
 
-  // THE FIX: Farm Progress Bars (Survival Rate)
-  const farmStatsMap = new Map<string, { live: number; original: number }>();
-  for (const load of activeLoads) {
-    const loadMortality = allDailyRecords
-      .filter((r) => r.loadId === load.id)
-      .reduce((s, r) => s + r.mortality, 0);
-    const harvestedBirds = allHarvests
-      .filter((h) => h.loadId === load.id)
-      .reduce((s, h) => s + h.quantity, 0);
-    const currentLive = Math.max(
-      0,
-      load.quantity - loadMortality - harvestedBirds,
-    );
-
-    const existing = farmStatsMap.get(load.farmName) || {
-      live: 0,
-      original: 0,
-    };
-    farmStatsMap.set(load.farmName, {
-      live: existing.live + currentLive,
-      original: existing.original + load.quantity,
-    });
-  }
-  const farmBirdData = Array.from(farmStatsMap.entries())
-    .map(([name, stats]) => ({
-      name,
-      count: stats.live,
-      original: stats.original,
-    }))
-    .sort((a, b) => b.count - a.count);
-
-  // User Role Data
+  // --- USER ROLE DATA ---
   const userRolesMap = new Map<string, number>();
   for (const u of allUsers) {
     const r = (u.role as string) || "user";
@@ -228,8 +273,7 @@ export default async function Dashboard() {
           <LiveGreeting userName={userName} />
           <LiveClock />
         </div>
-        {/* THE FIX: Replaced "Total Net" with "Total Active Capital" */}
-        <div className="bg-card border border-border/50 rounded-lg px-5 py-3 shadow-sm flex items-center gap-4">
+        <div className="bg-card border border-border/50 rounded-lg px-5 py-3 shadow-sm flex items-center justify-between w-full md:w-auto md:min-w-[300px]">
           <div className="flex flex-col">
             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Total Active Capital
@@ -238,7 +282,7 @@ export default async function Dashboard() {
               <AnimatedCounter value={totalCapital} formatType="peso" />
             </span>
           </div>
-          <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500">
+          <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500 text-center shrink-0">
             <Wallet className="w-5 h-5" />
           </div>
         </div>
@@ -374,20 +418,187 @@ export default async function Dashboard() {
         </div>
       </div>
 
-      {/* BENTO GRID LEVEL 3: INFRASTRUCTURE & FARMS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* THE FIX: Infrastructure & Users Stats (Added Total Loads!) */}
+      {/* NEW: THE FLEET OVERVIEW (FARM HIERARCHY) */}
+      <div className="pt-6 border-t border-border/50 space-y-10">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-2">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight text-foreground">
+              Fleet Overview
+            </h2>
+            <p className="text-sm font-medium text-muted-foreground mt-1">
+              Real-time status of all farms, buildings, and active flocks.
+            </p>
+          </div>
+        </div>
+
+        {Object.entries(fleetData).map(([farmName, farmData]) => {
+          const totalBuildings = farmData.buildings.length;
+          const activeCount = farmData.buildings.filter(
+            (b) => b.activeBatch,
+          ).length;
+          const farmUtilization =
+            totalBuildings > 0 ? (activeCount / totalBuildings) * 100 : 0;
+
+          return (
+            <div key={farmName} className="space-y-4">
+              {/* Farm Header */}
+              <div className="flex items-center justify-between pb-2 border-b-[3px] border-emerald-200 dark:border-emerald-900/50">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400 rounded-xl">
+                    <MapPin className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-black tracking-tighter uppercase text-foreground">
+                    {farmName}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest hidden sm:block">
+                    Utilization:
+                  </span>
+                  <span
+                    className={cn(
+                      "text-xs font-black px-3 py-1 rounded-lg uppercase tracking-widest",
+                      farmUtilization === 100
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                        : farmUtilization > 0
+                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                          : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
+                    )}
+                  >
+                    {activeCount} / {totalBuildings} Active
+                  </span>
+                </div>
+              </div>
+
+              {/* Buildings Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {farmData.buildings.map((bldg) => (
+                  <div
+                    key={bldg.buildingId}
+                    className={cn(
+                      "rounded-[1.5rem] border shadow-sm transition-all duration-300 relative overflow-hidden group flex flex-col",
+                      bldg.activeBatch
+                        ? "bg-white dark:bg-slate-950 border-emerald-200/60 dark:border-emerald-900/30 hover:shadow-md"
+                        : "bg-slate-50/50 dark:bg-slate-900/20 border-dashed border-border hover:bg-slate-50 dark:hover:bg-slate-900/40",
+                    )}
+                  >
+                    {/* Active Indicator Strip */}
+                    {bldg.activeBatch && (
+                      <div className="absolute top-0 left-0 w-full h-1.5 bg-linear-to-r from-emerald-400 to-blue-500" />
+                    )}
+
+                    <div className="p-5 flex-1">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
+                            <Warehouse
+                              className={cn(
+                                "w-4 h-4",
+                                bldg.activeBatch
+                                  ? "text-emerald-600 dark:text-emerald-500"
+                                  : "text-muted-foreground opacity-50",
+                              )}
+                            />
+                            {bldg.buildingName}
+                          </h4>
+                          {bldg.activeBatch && (
+                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">
+                              Batch:{" "}
+                              <span className="text-foreground">
+                                {bldg.activeBatch.loadName || "Unnamed"}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+
+                        {bldg.activeBatch ? (
+                          <div className="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest">
+                            Day {bldg.ageInDays}
+                          </div>
+                        ) : (
+                          <div className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest">
+                            Empty
+                          </div>
+                        )}
+                      </div>
+
+                      {bldg.activeBatch ? (
+                        <div className="grid grid-cols-2 gap-3 mt-4">
+                          <div className="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3">
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-500 block mb-1">
+                              Live Birds
+                            </span>
+                            <span className="text-xl font-black text-emerald-700 dark:text-emerald-400">
+                              {bldg.liveBirds.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="bg-red-50/50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-xl p-3">
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-red-600 dark:text-red-500 block mb-1">
+                              Mortality
+                            </span>
+                            <span className="text-xl font-black text-red-700 dark:text-red-400">
+                              {bldg.mortality.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-6 text-center opacity-70 grayscale">
+                          <AlertCircle className="w-8 h-8 text-muted-foreground mb-2 opacity-20" />
+                          <p className="text-sm font-bold text-muted-foreground">
+                            Ready for next cycle
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Footer */}
+                    <div className="p-3 border-t border-border/50 bg-slate-50/50 dark:bg-slate-900/20">
+                      {bldg.activeBatch ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          <Link
+                            href="/production/monitoring"
+                            className="flex items-center justify-center w-full py-2 bg-white dark:bg-slate-950 border border-border rounded-lg text-xs font-bold text-muted-foreground hover:text-foreground hover:border-slate-400 transition-all"
+                          >
+                            <Activity className="w-3.5 h-3.5 mr-1.5" /> Monitor
+                          </Link>
+                          <Link
+                            href="/reports"
+                            className="flex items-center justify-center w-full py-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50 rounded-lg text-xs font-bold transition-all"
+                          >
+                            <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> View
+                            Report
+                          </Link>
+                        </div>
+                      ) : (
+                        <Link
+                          href="/production/loading"
+                          className="flex items-center justify-center w-full py-2 bg-white dark:bg-slate-950 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-500 hover:text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400 transition-all group"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5 mr-1.5 opacity-50 group-hover:opacity-100" />{" "}
+                          Load New Flock
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* BENTO GRID LEVEL 4: SYSTEM STATS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-card border border-border/50 rounded-lg p-6 shadow-sm flex flex-col justify-between gap-4">
           <div>
             <h3 className="text-base font-black tracking-tight text-foreground">
-              System & Users
+              System Overview
             </h3>
             <p className="text-xs font-medium text-muted-foreground mt-1">
-              Active platform entities
+              Total registered entities
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-2">
+          <div className="grid grid-cols-4 gap-3">
             <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-secondary/30 border border-border/50">
               <MapPin className="w-5 h-5 text-indigo-500 mb-2" />
               <span className="text-lg font-black">
@@ -403,7 +614,7 @@ export default async function Dashboard() {
                 <AnimatedCounter value={allBuildings.length} />
               </span>
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Buildings
+                Bldgs
               </span>
             </div>
             <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-secondary/30 border border-border/50">
@@ -412,7 +623,7 @@ export default async function Dashboard() {
                 <AnimatedCounter value={allLoads.length} />
               </span>
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Total Loads
+                Loads
               </span>
             </div>
             <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-secondary/30 border border-border/50">
@@ -425,83 +636,18 @@ export default async function Dashboard() {
               </span>
             </div>
           </div>
-
-          <div className="p-4 rounded-lg bg-secondary/30 border border-border/50 flex flex-col">
-            <div className="flex justify-between items-center mb-2">
-              <div className="flex items-center gap-2">
-                <UsersIcon className="w-4 h-4 text-emerald-500" />
-                <span className="text-sm font-black uppercase tracking-wider text-foreground">
-                  Team Roles
-                </span>
-              </div>
-            </div>
-            <UserRoleChart data={userRoleData} />
-          </div>
         </div>
 
-        {/* Farm Progress Bars */}
-        <div className="bg-card border border-border/50 rounded-lg p-6 shadow-sm lg:col-span-2 flex flex-col">
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
-            <div>
+        <div className="bg-card border border-border/50 rounded-lg p-6 shadow-sm flex flex-col">
+          <div className="flex justify-between items-center mb-2">
+            <div className="flex items-center gap-2">
+              <UsersIcon className="w-4 h-4 text-emerald-500" />
               <h3 className="text-base font-black tracking-tight text-foreground">
-                Survival Rate by Farm
+                Team Roles
               </h3>
-              <p className="text-xs font-medium text-muted-foreground mt-1">
-                Live birds remaining vs original load
-              </p>
             </div>
-            <Link
-              href="/production/loading"
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-black uppercase tracking-widest text-[10px] rounded-xl hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors shadow-sm shrink-0"
-            >
-              View All Loads <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
           </div>
-
-          <div className="space-y-6 flex-1">
-            {farmBirdData.length > 0 ? (
-              farmBirdData.map((farm, idx) => {
-                // THE FIX: Math calculates survival rate instead of distribution!
-                const percentage =
-                  farm.original > 0 ? (farm.count / farm.original) * 100 : 0;
-                return (
-                  <div key={idx}>
-                    <div className="flex justify-between items-end mb-2">
-                      <span className="text-sm font-black uppercase tracking-wider text-foreground">
-                        {farm.name}
-                      </span>
-                      <div className="text-right">
-                        <span className="text-sm font-black text-foreground">
-                          {new Intl.NumberFormat("en-US").format(farm.count)}{" "}
-                          birds
-                        </span>
-                        <span className="text-[10px] font-bold text-muted-foreground ml-2">
-                          ({percentage.toFixed(1)}% Survival)
-                        </span>
-                      </div>
-                    </div>
-                    <div className="w-full bg-secondary/50 rounded-full h-3 overflow-hidden border border-border/50">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all duration-1000 ease-out",
-                          percentage < 80
-                            ? "bg-rose-500"
-                            : percentage < 90
-                              ? "bg-amber-500"
-                              : "bg-indigo-500",
-                        )}
-                        style={{ width: `${percentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="flex h-full min-h-[150px] items-center justify-center rounded-2xl border border-dashed border-border/70 bg-secondary/30 text-sm font-bold text-muted-foreground">
-                No active birds to display.
-              </div>
-            )}
-          </div>
+          <UserRoleChart data={userRoleData} />
         </div>
       </div>
     </div>
