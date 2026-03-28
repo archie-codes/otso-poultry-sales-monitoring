@@ -373,13 +373,13 @@ export default function MonitoringTableClient({
                   <Printer className="w-4 h-4 text-blue-600" />
                   Download PDF
                 </DropdownMenuItem>
-                <DropdownMenuItem
+                {/* <DropdownMenuItem
                   onClick={downloadCSV}
                   className="flex items-center gap-3 p-3 font-bold text-sm cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 >
                   <Download className="w-4 h-4 text-emerald-600" />
                   Download Excel (CSV)
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

@@ -99,7 +99,7 @@ export default function AddBuildingModal({
                   <button
                     type="submit"
                     disabled={loading}
-                    className="h-11 px-8 rounded-xl text-sm font-bold bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
+                    className="h-11 px-8 rounded-xl text-sm font-bold shadow-sm bg-blue-600 hover:bg-blue-700 text-white transition-all disabled:opacity-70 disabled:hover:translate-y-0"
                   >
                     {loading ? (
                       <>
@@ -108,7 +108,7 @@ export default function AddBuildingModal({
                       </>
                     ) : (
                       <>
-                        <Save className="w-4 h-4 mr-2 inline" /> Save Building
+                        <Save className="w-4 h-4 mr-2 inline " /> Save Building
                       </>
                     )}
                   </button>

@@ -237,6 +237,20 @@ export default async function ReportsPage() {
           ...sharedExpensesList,
         ],
         sharedExpenseShare,
+        // ---> THE FIX: ADDED DAILY LOGS/MORTALITY HISTORY HERE <---
+        dailyLogs: loadRecords
+          .filter((r) => Number(r.mortality) > 0) // Only send days with actual mortality
+          .map((r) => ({
+            date: r.recordDate || r.createdAt,
+            mortalityAm: r.mortalityAm || 0,
+            mortalityPm: r.mortalityPm || 0,
+            mortality: r.mortality || 0,
+          }))
+          .sort((a, b) => {
+            const dateA = a.date ? new Date(a.date).getTime() : 0;
+            const dateB = b.date ? new Date(b.date).getTime() : 0;
+            return dateA - dateB;
+          }),
       },
     };
   });

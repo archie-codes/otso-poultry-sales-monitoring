@@ -144,8 +144,6 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
       formatMoneyPDF(e.amount),
     ]);
 
-    // ---> Duplicate summary row completely removed from here! <---
-
     autoTable(doc, {
       startY: expY + 20,
       head: [["Date", "Expense Type", "Remarks", "Amount"]],
@@ -153,6 +151,34 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
         expRows.length > 0 ? expRows : [["No expenses logged", "-", "-", "-"]],
       theme: "grid",
       headStyles: { fillColor: [59, 130, 246] }, // Blue
+      styles: { fontSize: 8 },
+    });
+
+    // MORTALITY LOG TABLE WITH AM & PM
+    const mortY = (doc as any).lastAutoTable.finalY || expY + 30;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Daily Mortality Breakdown", 14, mortY + 15);
+
+    const mortalityRows = (batch.pdfPayload.mortalityLog || []).map(
+      (m: any) => [
+        m.date ? format(new Date(m.date), "MMM d, yyyy") : "Unknown Date",
+        m.am.toString(),
+        m.pm.toString(),
+        `${m.total} Heads`,
+        m.remarks,
+      ],
+    );
+
+    autoTable(doc, {
+      startY: mortY + 20,
+      head: [["Date", "AM", "PM", "Total", "Remarks"]],
+      body:
+        mortalityRows.length > 0
+          ? mortalityRows
+          : [["No mortality logged", "0", "0", "0 Heads", "-"]],
+      theme: "grid",
+      headStyles: { fillColor: [220, 38, 38] }, // Red
       styles: { fontSize: 8 },
     });
 

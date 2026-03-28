@@ -111,7 +111,14 @@ export default async function ExpensesPage(props: {
           return true;
         })
         .map((l) =>
-          JSON.stringify({ id: l.id, name: l.name || `Load ${l.id}` }),
+          // ---> THE FIX: Added loadDate, harvestDate, and isActive here! <---
+          JSON.stringify({
+            id: l.id,
+            name: l.name || `Load ${l.id}`,
+            loadDate: l.loadDate,
+            harvestDate: l.harvestDate,
+            isActive: l.isActive,
+          }),
         ),
     ),
   )
@@ -119,7 +126,7 @@ export default async function ExpensesPage(props: {
     .sort((a: any, b: any) => b.id - a.id);
 
   // ==========================================
-  // ---> THE FIX: INTELLIGENT FILTERING <---
+  // ---> INTELLIGENT FILTERING <---
   // ==========================================
   const filters = [];
 
@@ -248,7 +255,6 @@ export default async function ExpensesPage(props: {
       };
     });
 
-  // ---> THE FIX: Defined `displayLoadName` here so the server filter can read it <---
   const selectedLoadObj = availableLoads.find(
     (l: any) => String(l.id) === selectedLoad,
   );

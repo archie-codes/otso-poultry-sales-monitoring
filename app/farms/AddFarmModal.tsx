@@ -442,7 +442,7 @@ export default function AddFarmModal() {
                   <Button
                     type="submit"
                     disabled={loading}
-                    className="h-11 px-8 rounded-xl font-bold"
+                    className="h-11 px-8 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {loading ? (
                       <>

@@ -140,3 +140,42 @@ export async function addExpense(formData: FormData) {
     return { error: "Failed to save expense. Please try again." };
   }
 }
+
+export async function updateExpense(expenseId: number, formData: FormData) {
+  try {
+    const expenseDate = formData.get("expenseDate") as string;
+    const amount = formData.get("amount") as string;
+    const remarks = formData.get("remarks") as string;
+
+    if (!expenseId || !amount || !expenseDate) {
+      return { error: "Missing required fields." };
+    }
+
+    await db
+      .update(expenses)
+      .set({
+        expenseDate,
+        amount,
+        remarks: remarks || null,
+      })
+      .where(eq(expenses.id, expenseId));
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating expense:", error);
+    return { error: "Failed to update expense." };
+  }
+}
+
+export async function deleteExpense(expenseId: number) {
+  try {
+    if (!expenseId) return { error: "Expense ID is required." };
+
+    await db.delete(expenses).where(eq(expenses.id, expenseId));
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting expense:", error);
+    return { error: "Failed to delete expense." };
+  }
+}

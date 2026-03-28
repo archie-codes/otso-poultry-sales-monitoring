@@ -41,6 +41,16 @@ export default function ActiveBatchCard({ report }: { report: any }) {
   // =========================================================================
   const generatePDF = () => {
     const doc = new jsPDF("portrait");
+    const pageHeight = doc.internal.pageSize.height;
+
+    // Helper function to prevent headers from printing off the bottom of the page
+    const checkPageBreak = (currentY: number, requiredSpace: number) => {
+      if (currentY + requiredSpace > pageHeight - 20) {
+        doc.addPage();
+        return 20; // Return new Y starting position
+      }
+      return currentY;
+    };
 
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
@@ -71,7 +81,7 @@ export default function ActiveBatchCard({ report }: { report: any }) {
 
     doc.text(`Current Age: ${report.ageInDays} Days`, 120, 50);
 
-    // EXECUTIVE SUMMARY
+    // 1. EXECUTIVE SUMMARY TABLE
     autoTable(doc, {
       startY: 55,
       head: [
@@ -113,14 +123,15 @@ export default function ActiveBatchCard({ report }: { report: any }) {
       styles: { fontSize: 9 },
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY || 55;
+    let currentY = (doc as any).lastAutoTable.finalY;
 
-    // FEED EXPENSES TABLE
+    // 2. FEED EXPENSES TABLE
+    currentY = checkPageBreak(currentY, 30);
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Feed Consumption Log (To Date)", 14, finalY + 15);
+    doc.text("Feed Consumption Log (To Date)", 14, currentY + 15);
 
-    const feedRows = report.pdfPayload.feeds.map((f: any) => [
+    const feedRows = (report.pdfPayload.feeds || []).map((f: any) => [
       format(new Date(f.date), "MMM d, yyyy"),
       f.type,
       `${f.qty} Sacks`,
@@ -128,7 +139,7 @@ export default function ActiveBatchCard({ report }: { report: any }) {
     ]);
 
     autoTable(doc, {
-      startY: finalY + 20,
+      startY: currentY + 20,
       head: [["Date", "Feed Type", "Qty", "Calculated Cost"]],
       body:
         feedRows.length > 0
@@ -139,13 +150,15 @@ export default function ActiveBatchCard({ report }: { report: any }) {
       styles: { fontSize: 8 },
     });
 
-    // OTHER EXPENSES TABLE
-    const expY = (doc as any).lastAutoTable.finalY || finalY + 30;
+    currentY = (doc as any).lastAutoTable.finalY;
+
+    // 3. OTHER EXPENSES TABLE
+    currentY = checkPageBreak(currentY, 30);
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Direct & Shared Expenses (To Date)", 14, expY + 15);
+    doc.text("Direct & Shared Expenses (To Date)", 14, currentY + 15);
 
-    const expRows = report.pdfPayload.expenses.map((e: any) => [
+    const expRows = (report.pdfPayload.expenses || []).map((e: any) => [
       format(new Date(e.date), "MMM d, yyyy"),
       e.type,
       e.remarks || "-",
@@ -153,7 +166,7 @@ export default function ActiveBatchCard({ report }: { report: any }) {
     ]);
 
     autoTable(doc, {
-      startY: expY + 20,
+      startY: currentY + 20,
       head: [["Date", "Expense Type", "Remarks", "Amount"]],
       body:
         expRows.length > 0
@@ -162,6 +175,41 @@ export default function ActiveBatchCard({ report }: { report: any }) {
       theme: "grid",
       headStyles: { fillColor: [37, 99, 235] }, // Blue
       styles: { fontSize: 8 },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY;
+
+    // 4. ---> NEW: MORTALITY HISTORY TABLE <---
+    currentY = checkPageBreak(currentY, 30);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Mortality History Breakdown", 14, currentY + 15);
+
+    // Safely look for dailyLogs or mortality arrays from your payload
+    const dailyRecords =
+      report.pdfPayload.dailyLogs || report.pdfPayload.mortality || [];
+
+    // Only map days where mortality actually occurred
+    const mortalityRows = dailyRecords
+      .filter((m: any) => Number(m.mortality) > 0)
+      .map((m: any) => [
+        format(new Date(m.date), "MMM d, yyyy"),
+        Number(m.mortalityAm || 0).toLocaleString(),
+        Number(m.mortalityPm || 0).toLocaleString(),
+        Number(m.mortality || 0).toLocaleString(),
+      ]);
+
+    autoTable(doc, {
+      startY: currentY + 20,
+      head: [["Date", "AM Mortality", "PM Mortality", "Total Daily Mortality"]],
+      body:
+        mortalityRows.length > 0
+          ? mortalityRows
+          : [["No mortality logged yet", "-", "-", "-"]],
+      theme: "grid",
+      headStyles: { fillColor: [220, 38, 38] }, // Red header for mortality
+      styles: { fontSize: 8, halign: "center" },
+      columnStyles: { 0: { halign: "left" } }, // Keep date aligned left
     });
 
     doc.save(`Interim_Report_${report.farmName}_${report.buildingName}.pdf`);
@@ -260,7 +308,6 @@ export default function ActiveBatchCard({ report }: { report: any }) {
           <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Target Harvest
           </p>
-          {/* ---> DYNAMIC TARGET HARVEST TEXT <--- */}
           <p
             className={cn(
               "text-xs sm:text-sm font-bold",

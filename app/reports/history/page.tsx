@@ -95,10 +95,13 @@ export default async function HistoryPage() {
   const reports = historicalLoadsData.map((load) => {
     const actualQuantityLoad = Number(load.quantity) || 0;
     const loadRecords = allDailyRecords.filter((r) => r.loadId === load.id);
+
+    // Total mortality across all daily records for this load
     const farmMortality = loadRecords.reduce(
-      (sum, r) => sum + Number(r.mortality),
+      (sum, r) => sum + Number(r.mortality || 0),
       0,
     );
+
     const loadHarvests = allHarvests.filter((h) => h.loadId === load.id);
     const actualHarvest = loadHarvests.reduce(
       (sum, h) => sum + Number(h.quantity),
@@ -198,6 +201,30 @@ export default async function HistoryPage() {
       (e) => e.expenseType !== "feeds",
     );
 
+    // ---> STRICT MAPPING TO YOUR SCHEMA <---
+    const mortalityLog = loadRecords
+      .filter((r) => {
+        const am = Number(r.mortalityAm || 0);
+        const pm = Number(r.mortalityPm || 0);
+        const total = Number(r.mortality || 0);
+        return total > 0 || am > 0 || pm > 0;
+      })
+      .map((r) => {
+        const am = Number(r.mortalityAm || 0);
+        const pm = Number(r.mortalityPm || 0);
+        const total = Number(r.mortality || 0);
+
+        return {
+          date: r.recordDate || r.createdAt,
+          am,
+          pm,
+          total,
+          remarks: r.remarks || "-",
+        };
+      })
+      // Optional: Sort by date so the PDF log is chronological
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
     return {
       ...load,
       farmMortality,
@@ -231,6 +258,7 @@ export default async function HistoryPage() {
           ...sharedExpensesList,
         ],
         sharedExpenseShare,
+        mortalityLog,
       },
     };
   });
@@ -253,7 +281,7 @@ export default async function HistoryPage() {
     <div className="space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto pb-12">
       <div className="bg-card border border-border/50 p-6 lg:p-8 rounded-lg shadow-sm relative overflow-hidden flex flex-col justify-center">
         <div className="absolute top-0 right-0 w-64 h-64 bg-slate-500/10 rounded-full blur-3xl -z-10 translate-x-1/4 -translate-y-1/4 pointer-events-none"></div>
-        <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-3 text-foreground uppercase">
+        <h1 className="text-2xl sm:text-2xl font-black tracking-tight flex items-center gap-3 text-foreground uppercase">
           <Archive className="h-8 w-8 sm:h-10 sm:w-10 text-slate-600 shrink-0" />
           Historical Ledger
         </h1>
