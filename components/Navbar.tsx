@@ -102,11 +102,6 @@ const ownerGroups: NavGroup[] = [
     label: "Finance",
     items: [
       { name: "Expenses", href: "/expenses", icon: TrendingDown },
-      {
-        name: "Batch Summary",
-        href: "/finance/batch-summary",
-        icon: LineChart,
-      },
       { name: "Master Reports", href: "/reports", icon: FileBarChart },
       { name: "Historical Ledger", href: "/reports/history", icon: Archive },
     ],
