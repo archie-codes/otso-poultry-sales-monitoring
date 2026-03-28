@@ -419,6 +419,11 @@ export default function MonitoringTableClient({
                 <Calendar
                   mode="single"
                   selected={selectedDate}
+                  defaultMonth={selectedDate || new Date()}
+                  // ---> SHADCN DROPDOWN UPGRADE <---
+                  captionLayout="dropdown"
+                  fromYear={2020}
+                  toYear={new Date().getFullYear()}
                   onSelect={(date) => {
                     updateFilter(
                       "date",
@@ -426,6 +431,7 @@ export default function MonitoringTableClient({
                     );
                     setOpenDate(false);
                   }}
+                  disabled={(date) => date > new Date()} // Block Future Dates
                   initialFocus
                 />
               </PopoverContent>
@@ -728,7 +734,6 @@ export default function MonitoringTableClient({
                       <span className="text-xs font-black uppercase text-foreground">
                         {record.buildingName}
                       </span>
-                      {/* THE FIX: Static text instead of <Link> */}
                       <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 mt-0.5 w-fit">
                         {record.loadName || `Load ${record.loadId}`}
                       </span>

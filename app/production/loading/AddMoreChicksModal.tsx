@@ -23,7 +23,7 @@ import {
   ChevronDown,
   Wallet,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, startOfDay } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { FormattedNumberInput } from "@/components/ui/FormattedNumberInput";
@@ -44,11 +44,24 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
   const cleanPricePerChick = Number(pricePerChickInput.replace(/,/g, "")) || 0;
   const computedAddedCapital = cleanQuantity * cleanPricePerChick;
 
+  // Ensure we can't top-up before the batch existed!
+  const minValidDate = load.loadDate
+    ? startOfDay(new Date(load.loadDate))
+    : undefined;
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     if (!dateAdded || cleanQuantity <= 0 || cleanPricePerChick <= 0) {
       toast.error("Please fill in valid numbers and a date.");
+      return;
+    }
+
+    if (minValidDate && dateAdded.getTime() < minValidDate.getTime()) {
+      toast.error("Invalid Date", {
+        description: `Cannot add chicks before the original load date (${format(minValidDate, "MMM d, yyyy")}).`,
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
       return;
     }
 
@@ -121,15 +134,38 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
                 <Calendar
                   mode="single"
                   selected={dateAdded}
+                  defaultMonth={dateAdded || new Date()}
+                  // ---> SHADCN DROPDOWN UPGRADE <---
+                  captionLayout="dropdown"
+                  fromYear={minValidDate ? minValidDate.getFullYear() : 2020}
+                  toYear={new Date().getFullYear()}
                   onSelect={(date) => {
                     setDateAdded(date);
                     setIsCalendarOpen(false); // Auto close
                   }}
-                  disabled={(date) => date > new Date()} // Block Future Dates!
+                  disabled={(date) => {
+                    const today = new Date();
+                    today.setHours(23, 59, 59, 999);
+                    if (date > today) return true; // Block future
+
+                    // Block before initial load
+                    if (minValidDate) {
+                      const checkDate = new Date(date);
+                      checkDate.setHours(0, 0, 0, 0);
+                      if (checkDate.getTime() < minValidDate.getTime())
+                        return true;
+                    }
+                    return false;
+                  }}
                   initialFocus
                 />
               </PopoverContent>
             </Popover>
+            {minValidDate && (
+              <p className="text-[9px] font-bold text-blue-600 mt-1">
+                Must be on or after {format(minValidDate, "MMM d, yyyy")}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

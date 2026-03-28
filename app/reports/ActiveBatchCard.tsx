@@ -13,6 +13,8 @@ import {
   Clock,
   MoreVertical,
   FileText,
+  AlertTriangle,
+  Timer,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -29,6 +31,11 @@ const formatMoneyPDF = (amount: number) =>
   `PHP ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ActiveBatchCard({ report }: { report: any }) {
+  // ---> SMART BADGE LOGIC (Assuming 120 Days / 4 Months cycle) <---
+  const targetDays = 120;
+  const isReadyForHarvest = report.ageInDays >= targetDays;
+  const isApproachingHarvest = report.ageInDays >= targetDays - 14; // Approaching in 2 weeks
+
   // =========================================================================
   // THE INTERIM PDF GENERATOR
   // =========================================================================
@@ -52,7 +59,16 @@ export default function ActiveBatchCard({ report }: { report: any }) {
     doc.text(`Load/Batch ID: ${report.name || `Load ${report.id}`}`, 14, 50);
 
     doc.text(`Load Date: ${report.loadDateStr}`, 120, 38);
-    doc.text(`Current Status: Active`, 120, 44);
+
+    // Updates PDF Status based on the age logic
+    if (isReadyForHarvest) {
+      doc.setTextColor(220, 38, 38); // Red for PDF warning
+      doc.text(`Current Status: READY FOR HARVEST`, 120, 44);
+      doc.setTextColor(0, 0, 0);
+    } else {
+      doc.text(`Current Status: Active`, 120, 44);
+    }
+
     doc.text(`Current Age: ${report.ageInDays} Days`, 120, 50);
 
     // EXECUTIVE SUMMARY
@@ -136,8 +152,6 @@ export default function ActiveBatchCard({ report }: { report: any }) {
       formatMoneyPDF(e.amount),
     ]);
 
-    // ---> Duplicate summary row completely removed from here! <---
-
     autoTable(doc, {
       startY: expY + 20,
       head: [["Date", "Expense Type", "Remarks", "Amount"]],
@@ -172,8 +186,27 @@ export default function ActiveBatchCard({ report }: { report: any }) {
               </span>
               Active
             </span>
-            <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest">
-              Day {report.ageInDays}
+
+            {/* ---> DYNAMIC AGE BADGE <--- */}
+            <span
+              className={cn(
+                "text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest flex items-center gap-1.5 shadow-sm transition-colors",
+                isReadyForHarvest
+                  ? "bg-red-600 text-white animate-pulse" // Red if 120+ days
+                  : isApproachingHarvest
+                    ? "bg-amber-500 text-white" // Amber if close (106-119 days)
+                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400", // Normal Blue
+              )}
+            >
+              {isReadyForHarvest && (
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+              )}
+              {isApproachingHarvest && !isReadyForHarvest && (
+                <Timer className="w-3 h-3 shrink-0" />
+              )}
+              {isReadyForHarvest
+                ? "READY TO HARVEST"
+                : `Day ${report.ageInDays}`}
             </span>
           </div>
 
@@ -227,7 +260,15 @@ export default function ActiveBatchCard({ report }: { report: any }) {
           <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
             Target Harvest
           </p>
-          <p className="text-xs sm:text-sm font-bold text-foreground">
+          {/* ---> DYNAMIC TARGET HARVEST TEXT <--- */}
+          <p
+            className={cn(
+              "text-xs sm:text-sm font-bold",
+              isReadyForHarvest
+                ? "text-red-600 dark:text-red-500 font-black animate-pulse"
+                : "text-foreground",
+            )}
+          >
             {report.harvestDate
               ? new Date(report.harvestDate).toLocaleDateString()
               : "TBD"}

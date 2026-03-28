@@ -15,6 +15,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from "@/components/ui/command";
 import {
   Loader2,
@@ -126,6 +127,24 @@ export default function TransferFeedsModal({
     return activeLoads.filter((load) => load.farmName === selectedFarm);
   }, [selectedFarm, activeLoads]);
 
+  // ---> STRICT TIMEZONE LOGIC FOR DESTINATION LOAD <---
+  const selectedLoadDetails = activeLoads.find(
+    (l) => String(l.id) === selectedLoadId,
+  );
+
+  let minValidDate: Date | null = null;
+  if (selectedLoadDetails && selectedLoadDetails.loadDate) {
+    const parts = String(selectedLoadDetails.loadDate).split("T")[0].split("-");
+    if (parts.length === 3) {
+      minValidDate = new Date(
+        Number(parts[0]),
+        Number(parts[1]) - 1,
+        Number(parts[2]),
+      );
+      minValidDate.setHours(0, 0, 0, 0);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -149,6 +168,17 @@ export default function TransferFeedsModal({
         description: "Transfer date cannot be in the future.",
         style: { backgroundColor: "red", color: "white", border: "none" },
       });
+    }
+
+    if (minValidDate) {
+      const checkDate = new Date(allocatedDate);
+      checkDate.setHours(0, 0, 0, 0);
+      if (checkDate.getTime() < minValidDate.getTime()) {
+        return toast.error("Invalid Date", {
+          description: `Cannot transfer feeds before the flock arrived on ${format(minValidDate, "MMM d, yyyy")}.`,
+          style: { backgroundColor: "red", color: "white", border: "none" },
+        });
+      }
     }
 
     setLoading(true);
@@ -244,30 +274,32 @@ export default function TransferFeedsModal({
                         className="h-10"
                       />
                       <CommandEmpty>No stock from this supplier.</CommandEmpty>
-                      <CommandGroup>
-                        {uniqueWarehouseSuppliers.map((supplier) => (
-                          <CommandItem
-                            key={supplier}
-                            value={supplier}
-                            onSelect={() => {
-                              setSelectedWarehouseSupplier(supplier);
-                              setSelectedDeliveryId(""); // Reset feed batch if supplier changes!
-                              setOpenWarehouseSupplier(false);
-                            }}
-                            className="font-bold cursor-pointer"
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4 text-emerald-600",
-                                selectedWarehouseSupplier === supplier
-                                  ? "opacity-100"
-                                  : "opacity-0",
-                              )}
-                            />
-                            {supplier}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                      <CommandList>
+                        <CommandGroup>
+                          {uniqueWarehouseSuppliers.map((supplier) => (
+                            <CommandItem
+                              key={supplier}
+                              value={supplier}
+                              onSelect={() => {
+                                setSelectedWarehouseSupplier(supplier);
+                                setSelectedDeliveryId(""); // Reset feed batch if supplier changes!
+                                setOpenWarehouseSupplier(false);
+                              }}
+                              className="font-bold cursor-pointer"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 text-emerald-600",
+                                  selectedWarehouseSupplier === supplier
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                              {supplier}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
                     </Command>
                   </PopoverContent>
                 </Popover>
@@ -308,44 +340,46 @@ export default function TransferFeedsModal({
                         className="h-10"
                       />
                       <CommandEmpty>No feeds found.</CommandEmpty>
-                      <CommandGroup className="max-h-60 overflow-auto custom-scrollbar">
-                        {filteredDeliveries.map((d) => (
-                          <CommandItem
-                            key={d.id}
-                            value={`${d.feedType} ${format(new Date(d.deliveryDate), "MMM d yyyy")}`}
-                            onSelect={() => {
-                              setSelectedDeliveryId(String(d.id));
-                              setOpenDelivery(false);
-                            }}
-                            className="font-bold cursor-pointer border-b border-border/50 last:border-0 py-3"
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4 text-emerald-600 shrink-0",
-                                selectedDeliveryId === String(d.id)
-                                  ? "opacity-100"
-                                  : "opacity-0",
-                              )}
-                            />
-                            <div className="flex flex-col">
-                              <span>
-                                {/* ---> THE FIX: Apply formatSacks to the dropdown list <--- */}
-                                {formatSacks(d.remainingQuantity)} sacks •{" "}
-                                <span className="text-emerald-600">
-                                  {d.feedType}
-                                </span>
-                              </span>
-                              <span className="text-[10px] font-medium text-muted-foreground mt-0.5 truncate">
-                                Arrived:{" "}
-                                {format(
-                                  new Date(d.deliveryDate),
-                                  "MMM d, yyyy",
+                      <CommandList>
+                        <CommandGroup className="max-h-60 overflow-auto custom-scrollbar">
+                          {filteredDeliveries.map((d) => (
+                            <CommandItem
+                              key={d.id}
+                              value={`${d.feedType} ${format(new Date(d.deliveryDate), "MMM d yyyy")}`}
+                              onSelect={() => {
+                                setSelectedDeliveryId(String(d.id));
+                                setOpenDelivery(false);
+                              }}
+                              className="font-bold cursor-pointer border-b border-border/50 last:border-0 py-3"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 text-emerald-600 shrink-0",
+                                  selectedDeliveryId === String(d.id)
+                                    ? "opacity-100"
+                                    : "opacity-0",
                                 )}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                              />
+                              <div className="flex flex-col">
+                                <span>
+                                  {/* ---> THE FIX: Apply formatSacks to the dropdown list <--- */}
+                                  {formatSacks(d.remainingQuantity)} sacks •{" "}
+                                  <span className="text-emerald-600">
+                                    {d.feedType}
+                                  </span>
+                                </span>
+                                <span className="text-[10px] font-medium text-muted-foreground mt-0.5 truncate">
+                                  Arrived:{" "}
+                                  {format(
+                                    new Date(d.deliveryDate),
+                                    "MMM d, yyyy",
+                                  )}
+                                </span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
                     </Command>
                   </PopoverContent>
                 </Popover>
@@ -395,30 +429,33 @@ export default function TransferFeedsModal({
                         className="h-10"
                       />
                       <CommandEmpty>No farm found.</CommandEmpty>
-                      <CommandGroup>
-                        {uniqueFarms.map((farm) => (
-                          <CommandItem
-                            key={farm}
-                            value={farm}
-                            onSelect={() => {
-                              setSelectedFarm(farm);
-                              setSelectedLoadId(""); // Reset building if farm changes!
-                              setOpenFarm(false);
-                            }}
-                            className="font-bold cursor-pointer"
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4 text-emerald-600",
-                                selectedFarm === farm
-                                  ? "opacity-100"
-                                  : "opacity-0",
-                              )}
-                            />
-                            {farm}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                      <CommandList>
+                        <CommandGroup>
+                          {uniqueFarms.map((farm) => (
+                            <CommandItem
+                              key={farm}
+                              value={farm}
+                              onSelect={() => {
+                                setSelectedFarm(farm);
+                                setSelectedLoadId(""); // Reset building if farm changes!
+                                setAllocatedDate(new Date()); // Reset date because the valid date boundary changed!
+                                setOpenFarm(false);
+                              }}
+                              className="font-bold cursor-pointer"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 text-emerald-600",
+                                  selectedFarm === farm
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                              {farm}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
                     </Command>
                   </PopoverContent>
                 </Popover>
@@ -460,37 +497,37 @@ export default function TransferFeedsModal({
                   </PopoverTrigger>
                   <PopoverContent className="w-[300px] p-0" align="start">
                     <Command>
-                      <CommandInput
-                        placeholder="Search building..."
-                        className="h-10"
-                      />
+                      <CommandInput placeholder="Search building..." />
                       <CommandEmpty>No building found.</CommandEmpty>
-                      <CommandGroup>
-                        {filteredLoads.map((l) => (
-                          <CommandItem
-                            key={l.id}
-                            value={`${l.buildingName} ${l.name}`}
-                            onSelect={() => {
-                              setSelectedLoadId(String(l.id));
-                              setOpenLoad(false);
-                            }}
-                            className="font-bold cursor-pointer"
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4 text-emerald-600",
-                                selectedLoadId === String(l.id)
-                                  ? "opacity-100"
-                                  : "opacity-0",
-                              )}
-                            />
-                            {l.buildingName}{" "}
-                            <span className="text-[10px] font-medium text-muted-foreground ml-1">
-                              ({l.name})
-                            </span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                      <CommandList>
+                        <CommandGroup className="max-h-[250px] overflow-auto">
+                          {filteredLoads.map((l) => (
+                            <CommandItem
+                              key={l.id}
+                              value={`${l.buildingName} ${l.name}`}
+                              onSelect={() => {
+                                setSelectedLoadId(String(l.id));
+                                setAllocatedDate(new Date()); // Reset Date
+                                setOpenLoad(false);
+                              }}
+                              className="font-bold cursor-pointer py-2.5"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4 text-emerald-600",
+                                  selectedLoadId === String(l.id)
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                              {l.buildingName}{" "}
+                              <span className="text-[10px] font-medium text-muted-foreground ml-1">
+                                ({l.name})
+                              </span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
                     </Command>
                   </PopoverContent>
                 </Popover>
@@ -507,8 +544,9 @@ export default function TransferFeedsModal({
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
+                    disabled={!selectedLoadId}
                     className={cn(
-                      "w-full h-11 rounded-xl justify-between border-input font-normal px-3 bg-secondary/30",
+                      "w-full h-11 rounded-xl justify-between border-input font-normal px-3 bg-secondary/30 disabled:opacity-50",
                       !allocatedDate && "text-muted-foreground",
                     )}
                   >
@@ -527,15 +565,40 @@ export default function TransferFeedsModal({
                   <Calendar
                     mode="single"
                     selected={allocatedDate}
+                    defaultMonth={allocatedDate || new Date()}
+                    // ---> SHADCN DROPDOWN UPGRADE <---
+                    captionLayout="dropdown"
+                    fromYear={minValidDate ? minValidDate.getFullYear() : 2020}
+                    toYear={new Date().getFullYear()}
                     onSelect={(date) => {
                       setAllocatedDate(date);
                       setIsCalendarOpen(false);
                     }}
-                    disabled={(date) => date > new Date()} // <--- Add this line!
+                    disabled={(date) => {
+                      // Block Future
+                      const today = new Date();
+                      today.setHours(23, 59, 59, 999);
+                      if (date > today) return true;
+
+                      // Block Before Flock Arrival
+                      if (minValidDate) {
+                        const checkDate = new Date(date);
+                        checkDate.setHours(0, 0, 0, 0);
+                        if (checkDate.getTime() < minValidDate.getTime())
+                          return true;
+                      }
+
+                      return false;
+                    }}
                     initialFocus
                   />
                 </PopoverContent>
               </Popover>
+              {minValidDate && (
+                <p className="text-[9px] font-bold text-emerald-600 mt-1">
+                  Valid from {format(minValidDate, "MMM d, yyyy")}
+                </p>
+              )}
             </div>
 
             <div

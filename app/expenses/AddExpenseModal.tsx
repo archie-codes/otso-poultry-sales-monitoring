@@ -14,6 +14,8 @@ import {
   AlertCircle,
   Check,
   ChevronsUpDown,
+  Globe,
+  Warehouse,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfDay } from "date-fns";
@@ -47,17 +49,14 @@ import {
 import { FormattedNumberInput } from "@/components/ui/FormattedNumberInput";
 import { Input } from "@/components/ui/input";
 
-// --- STRICT DB MAPPING CATEGORIES ---
-const SHARED_CATEGORIES = [
+// --- CATEGORIES ---
+const EXPENSE_CATEGORIES = [
   { label: "Electricity", value: "electricity" },
   { label: "Water", value: "water" },
   { label: "Fuel / Gas / Diesel", value: "fuel" },
   { label: "Labor / Salary", value: "labor" },
   { label: "Maintenance / Truck", value: "maintenance" },
   { label: "Miscellaneous / Meals", value: "miscellaneous" },
-];
-
-const INDIVIDUAL_CATEGORIES = [
   { label: "Multivitamins & Medicine", value: "medicine" },
   { label: "Vaccine", value: "vaccine" },
   { label: "Antibiotics", value: "antibiotics" },
@@ -74,92 +73,126 @@ export default function AddExpenseModal({
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Combobox & Date States
   const [farmId, setFarmId] = useState("");
   const [openFarm, setOpenFarm] = useState(false);
 
   const [loadId, setLoadId] = useState("");
   const [openLoad, setOpenLoad] = useState(false);
 
-  const [expenseType, setExpenseType] = useState("");
-
-  const [expenseDate, setExpenseDate] = useState<Date | undefined>(new Date());
+  const [expenseDate, setExpenseDate] = useState<Date | undefined>(undefined);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+
+  const [expenseType, setExpenseType] = useState("");
 
   useEffect(() => setMounted(true), []);
 
-  const isSharedExpense = SHARED_CATEGORIES.some(
-    (cat) => cat.value === expenseType,
-  );
-
+  // ---> DYNAMIC CATEGORY LOGIC <---
   const isMedical = ["medicine", "vaccine", "antibiotics"].includes(
     expenseType,
   );
+  const isUtility = ["electricity", "water", "fuel"].includes(expenseType);
+  const isService = ["labor", "maintenance", "miscellaneous"].includes(
+    expenseType,
+  );
 
-  // ---> DYNAMIC PLACEHOLDERS <---
   let medNamePlaceholder = "e.g. ENROFLOXACIN";
   let medQtyPlaceholder = "e.g. 24 LITERS";
+  let remarksPlaceholder = "e.g. ADDITIONAL NOTES";
 
+  // Smart Placeholders based on category
   if (expenseType === "vaccine") {
     medNamePlaceholder = "e.g. GOMBURO 2";
     medQtyPlaceholder = "e.g. 8 VIALS - 2500 DOSE";
   } else if (expenseType === "antibiotics") {
     medNamePlaceholder = "e.g. DOXYCYCLINE";
     medQtyPlaceholder = "e.g. 5 KG";
+  } else if (expenseType === "electricity") {
+    remarksPlaceholder = "e.g. MAY 2026 BILL - METER #123";
+  } else if (expenseType === "water") {
+    remarksPlaceholder = "e.g. MAY 2026 WATER BILL";
+  } else if (expenseType === "fuel") {
+    remarksPlaceholder = "e.g. 50L DIESEL FOR GENERATOR";
+  } else if (expenseType === "labor") {
+    remarksPlaceholder = "e.g. JUAN DELA CRUZ - WEEKLY SALARY";
+  } else if (expenseType === "maintenance") {
+    remarksPlaceholder = "e.g. REPAIR BUILDING 1 WATER PUMP";
+  } else if (expenseType === "miscellaneous") {
+    remarksPlaceholder = "e.g. STAFF LUNCH / HARDWARE SUPPLIES";
+  } else if (isMedical) {
+    remarksPlaceholder = "e.g. ADMINISTERED VIA DRINKING WATER";
   }
 
-  // MATH ENGINE TO FIND WHO WAS ALIVE ON THIS DATE
-  const eligibleLoads = useMemo(() => {
-    if (!farmId || !expenseDate) return [];
+  // --- LOGIC: Get all loads for the selected farm ---
+  const farmLoads = useMemo(() => {
+    if (!farmId) return [];
+    return loadTimelines
+      .filter((l) => l.farmId === Number(farmId))
+      .sort(
+        (a, b) =>
+          new Date(b.loadDate).getTime() - new Date(a.loadDate).getTime(),
+      );
+  }, [farmId, loadTimelines]);
 
+  const activeFarmLoads = useMemo(() => {
+    return farmLoads.filter((l) => l.isActive);
+  }, [farmLoads]);
+
+  // ---> THE FIX: Check if we have multiple active buildings to justify sharing <---
+  const hasMultipleActiveBuildings = activeFarmLoads.length > 1;
+
+  // --- LOGIC: Calculate exact valid date boundaries based on target ---
+  const selectedLoadDetail = farmLoads.find((l) => String(l.id) === loadId);
+
+  const dateBoundaries = useMemo(() => {
+    if (loadId === "shared" && farmLoads.length > 0) {
+      const earliest = new Date(
+        Math.min(...farmLoads.map((l) => new Date(l.loadDate).getTime())),
+      );
+      return { min: startOfDay(earliest), max: startOfDay(new Date()) };
+    }
+    if (selectedLoadDetail) {
+      const min = startOfDay(new Date(selectedLoadDetail.loadDate));
+      const max = selectedLoadDetail.isActive
+        ? startOfDay(new Date())
+        : startOfDay(new Date(selectedLoadDetail.harvestDate));
+      return { min, max };
+    }
+    return null;
+  }, [loadId, farmLoads, selectedLoadDetail]);
+
+  const activeSharedLoadsOnDate = useMemo(() => {
+    if (loadId !== "shared" || !expenseDate || !farmId) return [];
     const targetDate = startOfDay(expenseDate).getTime();
 
-    return loadTimelines.filter((load) => {
-      if (load.farmId !== Number(farmId)) return false;
-
+    return farmLoads.filter((load) => {
       const start = startOfDay(new Date(load.loadDate)).getTime();
-      const end = load.isActive
-        ? startOfDay(new Date()).getTime()
-        : startOfDay(new Date(load.harvestDate)).getTime();
-
-      return targetDate >= start && targetDate <= end;
+      if (start > targetDate) return false;
+      if (!load.isActive && load.harvestDate) {
+        const hDate = startOfDay(new Date(load.harvestDate)).getTime();
+        if (targetDate >= hDate) return false;
+      }
+      return true;
     });
-  }, [farmId, expenseDate, loadTimelines]);
+  }, [expenseDate, loadId, farmLoads, farmId]);
 
-  const canSave = eligibleLoads.length > 0;
+  const canSave =
+    loadId === "shared" ? activeSharedLoadsOnDate.length > 0 : !!expenseDate;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (!farmId || !expenseType || !expenseDate) {
-      toast.error("Missing Field", {
-        description: "Please fill out all required fields.",
-      });
-      return;
-    }
-
-    if (!isSharedExpense && !loadId) {
+    if (!farmId || !loadId || !expenseDate || !expenseType) {
       toast.error("Missing Field", {
         description:
-          "Please select a target building for this specific expense.",
+          "Please fill out all required fields, including the target allocation.",
       });
       return;
     }
 
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    if (expenseDate.getTime() > today.getTime()) {
-      toast.error("Invalid Date", {
-        description: "Expense date cannot be in the future.",
-        style: { backgroundColor: "red", color: "white", border: "none" },
-      });
-      return;
-    }
-
-    if (!canSave) {
+    if (loadId === "shared" && activeSharedLoadsOnDate.length === 0) {
       toast.error("Invalid Date", {
         description:
-          "No batches were active on this farm during the selected date.",
+          "No batches were active on this farm during the selected date to share the cost.",
       });
       return;
     }
@@ -168,7 +201,7 @@ export default function AddExpenseModal({
 
     const formData = new FormData(e.currentTarget);
     formData.set("farmId", farmId);
-    formData.set("loadId", isSharedExpense ? "shared" : loadId);
+    formData.set("loadId", loadId);
     formData.set("expenseType", expenseType);
     formData.set("expenseDate", format(expenseDate, "yyyy-MM-dd"));
 
@@ -181,16 +214,45 @@ export default function AddExpenseModal({
       toast.error("Error Saving Expense", { description: result.error });
     } else {
       toast.success("Expense Recorded!", {
-        description: "The financial record has been saved.",
+        description: "The financial record has been saved securely.",
       });
       setIsOpen(false);
       setFarmId("");
       setLoadId("");
       setExpenseType("");
-      setExpenseDate(new Date());
+      setExpenseDate(undefined);
     }
     setLoading(false);
   }
+
+  // ---> REUSABLE INPUT BLOCKS FOR DYNAMIC LAYOUT <---
+  const amountBlock = (
+    <div className="space-y-2">
+      <label className="text-sm font-semibold text-red-600 dark:text-red-400">
+        Total Amount (₱) <span className="text-red-500">*</span>
+      </label>
+      <FormattedNumberInput
+        name="amount"
+        required
+        allowDecimals={true}
+        placeholder="10,000.00"
+        className="h-14 rounded-xl bg-background font-black text-2xl px-4 border-red-200 focus-visible:ring-red-500 placeholder:text-muted-foreground/50"
+      />
+    </div>
+  );
+
+  const remarksBlock = (
+    <div className="space-y-2">
+      <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        Remarks / Details (Optional)
+      </label>
+      <Input
+        name="remarks"
+        placeholder={remarksPlaceholder}
+        className="h-14 rounded-xl font-bold uppercase text-xs border-border/50 bg-slate-50 dark:bg-slate-900/50"
+      />
+    </div>
+  );
 
   return (
     <>
@@ -205,7 +267,7 @@ export default function AddExpenseModal({
         mounted &&
         createPortal(
           <div className="fixed inset-0 z-100 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="fixed z-101 w-full max-w-lg border border-border/50 bg-background shadow-2xl sm:rounded-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="fixed z-101 w-full max-w-lg border border-border/50 bg-background shadow-2xl sm:rounded-[2.5rem] max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               {/* HEADER */}
               <div className="flex justify-between items-center p-6 pb-5 border-b border-border/50 bg-slate-50/50 dark:bg-slate-900/20 z-10 shrink-0">
                 <div>
@@ -214,7 +276,7 @@ export default function AddExpenseModal({
                     Expense
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Record costs and distribute budget.
+                    Select target batch to identify valid dates.
                   </p>
                 </div>
                 <button
@@ -226,138 +288,303 @@ export default function AddExpenseModal({
               </div>
 
               {/* SCROLLABLE BODY */}
-              <div className="p-6 overflow-y-auto custom-scrollbar">
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="grid grid-cols-1 gap-4">
-                    {/* ---> SEARCHABLE FARM COMBOBOX <--- */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold">
-                        Select Farm <span className="text-red-500">*</span>
-                      </label>
-                      <Popover open={openFarm} onOpenChange={setOpenFarm}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={openFarm}
-                            className={cn(
-                              "w-full h-11 justify-between rounded-xl font-normal bg-background border-input shadow-sm",
-                              !farmId && "text-muted-foreground",
+              <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                <form
+                  onSubmit={handleSubmit}
+                  className="space-y-5"
+                  id="expenseForm"
+                >
+                  {/* 1. SELECT FARM */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold">
+                      1. Select Farm <span className="text-red-500">*</span>
+                    </label>
+                    <Popover open={openFarm} onOpenChange={setOpenFarm}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={openFarm}
+                          className={cn(
+                            "w-full h-11 justify-between rounded-xl font-normal bg-background border-input shadow-sm",
+                            !farmId && "text-muted-foreground",
+                          )}
+                        >
+                          <span className="truncate uppercase font-bold text-xs tracking-wider">
+                            {farmId
+                              ? farms.find((f) => String(f.id) === farmId)?.name
+                              : "-- Select Farm --"}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-200">
+                        <Command>
+                          <CommandInput placeholder="Search farm..." />
+                          <CommandList className="max-h-[200px]">
+                            <CommandEmpty>No farm found.</CommandEmpty>
+                            <CommandGroup>
+                              {farms.map((farm) => (
+                                <CommandItem
+                                  key={farm.id}
+                                  value={farm.name}
+                                  onSelect={() => {
+                                    setFarmId(String(farm.id));
+                                    setLoadId(""); // Reset target
+                                    setExpenseDate(undefined); // Reset date
+                                    setOpenFarm(false);
+                                  }}
+                                  className="font-bold text-xs uppercase tracking-wider cursor-pointer py-2.5"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4 text-red-600",
+                                      farmId === String(farm.id)
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                  {farm.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* 2. SELECT TARGET (BUILDING OR SHARED) */}
+                  <div className="space-y-2 animate-in fade-in duration-300">
+                    <label className="text-sm font-semibold">
+                      2. Target Allocation{" "}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <Popover open={openLoad} onOpenChange={setOpenLoad}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          disabled={!farmId}
+                          className={cn(
+                            "w-full h-11 justify-between rounded-xl font-bold bg-background shadow-sm",
+                            !loadId && "text-muted-foreground border-input",
+                            loadId === "shared" &&
+                              "text-blue-700 dark:text-blue-400 border-blue-300 bg-blue-50/50 dark:bg-blue-950/20",
+                            loadId !== "" &&
+                              loadId !== "shared" &&
+                              "text-emerald-700 dark:text-emerald-400 border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20",
+                          )}
+                        >
+                          <span className="truncate uppercase text-xs tracking-wider">
+                            {loadId === "shared"
+                              ? "🌐 Divide Across Active Flocks"
+                              : loadId
+                                ? selectedLoadDetail?.buildingName +
+                                  " (" +
+                                  selectedLoadDetail?.name +
+                                  ")"
+                                : "-- Select Who is Billed --"}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-200">
+                        <Command>
+                          <CommandList className="max-h-[300px] overflow-auto custom-scrollbar">
+                            {/* ---> THE FIX: HIDE SHARED IF ONLY 1 ACTIVE BUILDING <--- */}
+                            {hasMultipleActiveBuildings && (
+                              <CommandGroup heading="Farm-Wide">
+                                <CommandItem
+                                  onSelect={() => {
+                                    setLoadId("shared");
+                                    setExpenseDate(undefined); // Reset date
+                                    setOpenLoad(false);
+                                  }}
+                                  className="font-black text-xs uppercase tracking-wider cursor-pointer py-3 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400"
+                                >
+                                  <Globe className="w-4 h-4 mr-2" /> Divide
+                                  Across Active Flocks
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4",
+                                      loadId === "shared"
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                </CommandItem>
+                              </CommandGroup>
                             )}
-                          >
-                            <span className="truncate uppercase font-bold text-xs tracking-wider">
-                              {farmId
-                                ? farms.find((f) => String(f.id) === farmId)
-                                    ?.name
-                                : "-- Select Farm --"}
-                            </span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-200">
-                          <Command>
-                            <CommandInput placeholder="Search farm..." />
-                            <CommandList className="max-h-[200px]">
-                              <CommandEmpty>No farm found.</CommandEmpty>
-                              <CommandGroup>
-                                {farms.map((farm) => (
+
+                            <CommandGroup heading="Specific Active Buildings">
+                              {activeFarmLoads.length === 0 ? (
+                                <div className="py-3 px-2 text-xs text-muted-foreground text-center font-bold">
+                                  No active buildings.
+                                </div>
+                              ) : (
+                                activeFarmLoads.map((load) => (
                                   <CommandItem
-                                    key={farm.id}
-                                    value={farm.name}
+                                    key={load.id}
+                                    value={`${load.buildingName} ${load.name}`}
                                     onSelect={() => {
-                                      setFarmId(String(farm.id));
-                                      setLoadId(""); // Reset building
-                                      setOpenFarm(false);
+                                      setLoadId(String(load.id));
+                                      setExpenseDate(undefined); // Reset date
+                                      setOpenLoad(false);
                                     }}
                                     className="font-bold text-xs uppercase tracking-wider cursor-pointer py-2.5"
                                   >
+                                    <Warehouse className="w-3.5 h-3.5 mr-2 opacity-50" />
+                                    {load.buildingName} - {load.name}
+                                    <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded border bg-emerald-50 text-emerald-600 border-emerald-200">
+                                      Active
+                                    </span>
                                     <Check
                                       className={cn(
-                                        "mr-2 h-4 w-4 text-red-600",
-                                        farmId === String(farm.id)
+                                        "ml-auto h-4 w-4 text-emerald-600",
+                                        loadId === String(load.id)
                                           ? "opacity-100"
                                           : "opacity-0",
                                       )}
                                     />
-                                    {farm.name}
                                   </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-
-                    {/* ---> REPAIRED DATE PICKER <--- */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold">
-                        Expense Date <span className="text-red-500">*</span>
-                      </label>
-                      <Popover
-                        open={isCalendarOpen}
-                        onOpenChange={setIsCalendarOpen}
-                      >
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            className={cn(
-                              "w-full h-11 rounded-xl border border-input bg-background px-4 py-2 text-sm font-bold uppercase tracking-wider text-foreground hover:bg-background focus:ring-red-500 flex items-center justify-start text-left shadow-sm",
-                              !expenseDate && "text-muted-foreground",
-                            )}
-                          >
-                            <CalendarIcon className="mr-3 h-4 w-4 opacity-70" />
-                            <span className="flex-1 truncate">
-                              {expenseDate
-                                ? format(expenseDate, "MMM d, yyyy")
-                                : "Pick a date"}
-                            </span>
-                            <ChevronDown className="h-4 w-4 opacity-60" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 z-200">
-                          <Calendar
-                            mode="single"
-                            selected={expenseDate}
-                            onSelect={(date) => {
-                              if (date) {
-                                setExpenseDate(date);
-                                setIsCalendarOpen(false); // Auto closes!
-                              }
-                            }}
-                            disabled={(date) => date > new Date()} // Blocks Future Dates!
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
+                                ))
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
-                  <div className="space-y-2">
+                  {/* 3. SELECT DATE (GATED BY TARGET) WITH DROPDOWNS */}
+                  <div className="space-y-1 animate-in fade-in duration-300">
                     <label className="text-sm font-semibold">
-                      Expense Category <span className="text-red-500">*</span>
+                      3. Expense Date <span className="text-red-500">*</span>
+                    </label>
+                    <Popover
+                      open={isCalendarOpen}
+                      onOpenChange={setIsCalendarOpen}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          disabled={!loadId}
+                          className={cn(
+                            "w-full h-11 rounded-xl border border-input bg-background px-4 py-2 text-sm font-bold uppercase tracking-wider text-foreground hover:bg-background focus:ring-red-500 flex items-center justify-start text-left shadow-sm disabled:opacity-50",
+                            !expenseDate && "text-muted-foreground",
+                          )}
+                        >
+                          <CalendarIcon className="mr-3 h-4 w-4 opacity-70" />
+                          <span className="flex-1 truncate">
+                            {expenseDate
+                              ? format(expenseDate, "MMM d, yyyy")
+                              : "Pick valid date"}
+                          </span>
+                          <ChevronDown className="h-4 w-4 opacity-60" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 z-200">
+                        <Calendar
+                          mode="single"
+                          selected={expenseDate}
+                          defaultMonth={
+                            expenseDate ||
+                            (dateBoundaries ? dateBoundaries.max : new Date())
+                          }
+                          captionLayout="dropdown"
+                          fromYear={
+                            dateBoundaries
+                              ? dateBoundaries.min.getFullYear()
+                              : 2020
+                          }
+                          toYear={new Date().getFullYear()}
+                          onSelect={(date) => {
+                            if (date) {
+                              setExpenseDate(date);
+                              setIsCalendarOpen(false);
+                            }
+                          }}
+                          disabled={(date) => {
+                            const d = startOfDay(date).getTime();
+                            const today = startOfDay(new Date()).getTime();
+                            if (d > today) return true; // Block future
+
+                            // Block dates outside the valid boundary
+                            if (dateBoundaries) {
+                              return (
+                                d < dateBoundaries.min.getTime() ||
+                                d > dateBoundaries.max.getTime()
+                              );
+                            }
+                            return true;
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+
+                    {/* UI FEEDBACK FOR BACKLOG DATES */}
+                    {loadId && dateBoundaries && (
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500 pt-1">
+                        Valid Range: {format(dateBoundaries.min, "MMM d, yyyy")}{" "}
+                        - {format(dateBoundaries.max, "MMM d, yyyy")}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* SHARED EXPENSE VISUAL FEEDBACK */}
+                  {loadId === "shared" && expenseDate && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900/50 flex gap-3 animate-in fade-in duration-300">
+                      {canSave ? (
+                        <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      )}
+                      <div>
+                        {canSave ? (
+                          <>
+                            <p className="text-xs font-black text-blue-800 dark:text-blue-300 uppercase tracking-wide">
+                              Cost Shared Among:
+                            </p>
+                            <p className="text-[11px] font-bold text-blue-700/80 dark:text-blue-400 mt-1 leading-relaxed">
+                              {activeSharedLoadsOnDate
+                                .map((l) => `${l.buildingName} (${l.name})`)
+                                .join(", ")}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-[11px] font-bold text-red-700 leading-relaxed">
+                            No flocks were active on{" "}
+                            {format(expenseDate, "MMM d, yyyy")} to share this
+                            cost.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 4. SELECT CATEGORY */}
+                  <div className="space-y-2 pt-2 border-t border-border/50">
+                    <label className="text-sm font-semibold">
+                      4. Expense Category{" "}
+                      <span className="text-red-500">*</span>
                     </label>
                     <Select value={expenseType} onValueChange={setExpenseType}>
-                      <SelectTrigger className="w-full h-11 rounded-xl bg-background border-input focus:ring-red-500">
+                      <SelectTrigger className="w-full h-11 rounded-xl bg-background border-input focus:ring-red-500 font-bold uppercase text-xs tracking-wider">
                         <SelectValue placeholder="-- Select Category --" />
                       </SelectTrigger>
                       <SelectContent className="z-200 max-h-[300px]">
                         <SelectGroup>
-                          <SelectLabel className="text-blue-600 font-black tracking-widest text-[10px] uppercase">
-                            Farm Division (Shared Cost)
+                          <SelectLabel className="text-muted-foreground font-black tracking-widest text-[10px] uppercase">
+                            Available Categories
                           </SelectLabel>
-                          {SHARED_CATEGORIES.map((cat) => (
-                            <SelectItem key={cat.value} value={cat.value}>
-                              {cat.label}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                        <SelectGroup>
-                          <SelectLabel className="text-emerald-600 font-black tracking-widest text-[10px] uppercase mt-2">
-                            Individual (Per Building)
-                          </SelectLabel>
-                          {INDIVIDUAL_CATEGORIES.map((cat) => (
-                            <SelectItem key={cat.value} value={cat.value}>
+                          {EXPENSE_CATEGORIES.map((cat) => (
+                            <SelectItem
+                              key={cat.value}
+                              value={cat.value}
+                              className="font-bold text-xs uppercase"
+                            >
                               {cat.label}
                             </SelectItem>
                           ))}
@@ -366,216 +593,94 @@ export default function AddExpenseModal({
                     </Select>
                   </div>
 
+                  {/* ---> DYNAMIC LAYOUTS BASED ON SELECTED CATEGORY <--- */}
                   {expenseType && (
-                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                      {isMedical ? (
-                        <div className="grid grid-cols-2 gap-4 bg-emerald-50 dark:bg-emerald-950/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
-                              Item Name *
-                            </label>
-                            <Input
-                              name="medName"
-                              placeholder={medNamePlaceholder}
-                              required
-                              className="h-10 rounded-xl font-bold uppercase text-xs border-emerald-200 focus-visible:ring-emerald-500 bg-white dark:bg-slate-950"
-                            />
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300 pt-2 border-t border-border/50">
+                      {/* LAYOUT 1: MEDICAL (Name, Qty, Amount + Remarks bottom) */}
+                      {isMedical && (
+                        <>
+                          <div className="grid grid-cols-2 gap-4 bg-emerald-50 dark:bg-emerald-950/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
+                                Item Name *
+                              </label>
+                              <Input
+                                name="medName"
+                                placeholder={medNamePlaceholder}
+                                required
+                                className="h-10 rounded-xl font-bold uppercase text-xs border-emerald-200 focus-visible:ring-emerald-500 bg-white dark:bg-slate-950"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
+                                Qty & Unit *
+                              </label>
+                              <Input
+                                name="medQty"
+                                placeholder={medQtyPlaceholder}
+                                required
+                                className="h-10 rounded-xl font-bold uppercase text-xs border-emerald-200 focus-visible:ring-emerald-500 bg-white dark:bg-slate-950"
+                              />
+                            </div>
                           </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
-                              Qty & Unit *
-                            </label>
-                            <Input
-                              name="medQty"
-                              placeholder={medQtyPlaceholder}
-                              required
-                              className="h-10 rounded-xl font-bold uppercase text-xs border-emerald-200 focus-visible:ring-emerald-500 bg-white dark:bg-slate-950"
-                            />
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {amountBlock}
+                            {remarksBlock}
                           </div>
+                        </>
+                      )}
+
+                      {/* LAYOUT 2: UTILITIES (Amount & Remarks Side-by-Side) */}
+                      {isUtility && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {amountBlock}
+                          {remarksBlock}
                         </div>
-                      ) : (
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            Remarks (Optional)
-                          </label>
-                          <Input
-                            name="remarks"
-                            placeholder="e.g. MAY 2026 WATER BILL"
-                            className="h-11 rounded-xl font-bold uppercase text-xs border-border/50"
-                          />
-                        </div>
+                      )}
+
+                      {/* LAYOUT 3: SERVICES (Remarks first, Amount second) */}
+                      {isService && (
+                        <>
+                          {remarksBlock}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {amountBlock}
+                          </div>
+                        </>
                       )}
                     </div>
                   )}
-
-                  {expenseType && farmId && expenseDate && (
-                    <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
-                      <div
-                        className={cn(
-                          "rounded-xl p-4 flex gap-3 items-start shadow-inner border",
-                          canSave
-                            ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900/50"
-                            : "bg-red-50 border-red-200 text-red-800",
-                        )}
-                      >
-                        {canSave ? (
-                          <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                        ) : (
-                          <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                        )}
-                        <div>
-                          {canSave ? (
-                            <>
-                              <p className="text-sm font-black text-blue-800 dark:text-blue-300">
-                                Active Buildings Detected
-                              </p>
-                              <p className="text-xs text-blue-700/80 dark:text-blue-400 mt-1 leading-relaxed">
-                                On{" "}
-                                <strong>
-                                  {format(expenseDate, "MMM d, yyyy")}
-                                </strong>
-                                , there{" "}
-                                {eligibleLoads.length === 1 ? "was" : "were"}{" "}
-                                <strong>{eligibleLoads.length}</strong> active{" "}
-                                {eligibleLoads.length === 1
-                                  ? "building"
-                                  : "buildings"}
-                                : (
-                                {eligibleLoads
-                                  .map((l) => l.buildingName)
-                                  .join(", ")}
-                                ).
-                                {isSharedExpense &&
-                                  " This cost will be divided among them in the Historical Ledger."}
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-sm font-black">Invalid Date</p>
-                              <p className="text-xs mt-1 leading-relaxed">
-                                There were no chickens loaded in this farm on{" "}
-                                {format(expenseDate, "MMM d, yyyy")}. You cannot
-                                charge expenses to empty buildings.
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* ---> SEARCHABLE TARGET BUILDING COMBOBOX <--- */}
-                      {!isSharedExpense && canSave && (
-                        <div className="space-y-2 p-4 bg-emerald-50/50 dark:bg-emerald-950/10 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
-                          <label className="text-sm font-semibold text-emerald-700 dark:text-emerald-500">
-                            Which building is this for?{" "}
-                            <span className="text-red-500">*</span>
-                          </label>
-
-                          <Popover open={openLoad} onOpenChange={setOpenLoad}>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                role="combobox"
-                                aria-expanded={openLoad}
-                                className={cn(
-                                  "w-full h-11 justify-between rounded-xl font-normal bg-background border-emerald-200 shadow-sm",
-                                  !loadId && "text-muted-foreground",
-                                )}
-                              >
-                                <span className="truncate uppercase font-bold text-xs tracking-wider">
-                                  {loadId
-                                    ? eligibleLoads.find(
-                                        (l) => String(l.id) === loadId,
-                                      )?.buildingName + " (Active Flock)"
-                                    : "-- Select Target Building --"}
-                                </span>
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-200">
-                              <Command>
-                                <CommandInput placeholder="Search active building..." />
-                                <CommandList className="max-h-[200px]">
-                                  <CommandEmpty>
-                                    No active building found.
-                                  </CommandEmpty>
-                                  <CommandGroup>
-                                    {eligibleLoads.map((load) => (
-                                      <CommandItem
-                                        key={load.id}
-                                        value={load.buildingName}
-                                        onSelect={() => {
-                                          setLoadId(String(load.id));
-                                          setOpenLoad(false);
-                                        }}
-                                        className="font-bold text-xs uppercase tracking-wider cursor-pointer py-2.5"
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-4 w-4 text-emerald-600",
-                                            loadId === String(load.id)
-                                              ? "opacity-100"
-                                              : "opacity-0",
-                                          )}
-                                        />
-                                        {load.buildingName} (Active Flock)
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 gap-4 pt-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-semibold text-red-600 dark:text-red-400">
-                        Total Amount (₱) <span className="text-red-500">*</span>
-                      </label>
-                      <FormattedNumberInput
-                        name="amount"
-                        required
-                        allowDecimals={true}
-                        placeholder="10,000.00"
-                        className="h-14 rounded-xl bg-background font-black text-2xl px-4 border-red-200 focus-visible:ring-red-500 placeholder:text-muted-foreground/50"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex justify-end gap-3 border-t border-border/50 mt-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setIsOpen(false)}
-                      className="h-11 px-6 rounded-xl font-bold"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={
-                        loading ||
-                        !canSave ||
-                        (!isSharedExpense && !loadId && expenseType !== "")
-                      }
-                      className="h-11 px-8 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 disabled:hover:translate-y-0"
-                    >
-                      {loading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />{" "}
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-4 h-4 mr-2" /> Save Expense
-                        </>
-                      )}
-                    </Button>
-                  </div>
                 </form>
+              </div>
+
+              {/* FOOTER */}
+              <div className="p-6 pt-5 flex justify-end gap-3 border-t border-border/50 shrink-0 bg-slate-50/50 dark:bg-slate-900/20">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setIsOpen(false)}
+                  className="h-11 px-6 rounded-xl font-bold"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form="expenseForm"
+                  disabled={
+                    loading ||
+                    !canSave ||
+                    !loadId ||
+                    !expenseType ||
+                    !expenseDate
+                  }
+                  className="h-11 px-8 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 hover:-translate-y-0.5 transition-all shadow-sm disabled:opacity-50 disabled:hover:translate-y-0"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  Save Expense
+                </Button>
               </div>
             </div>
           </div>,

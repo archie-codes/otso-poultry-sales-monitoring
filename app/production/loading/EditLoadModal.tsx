@@ -118,6 +118,14 @@ export default function EditLoadModal({
     formData.set("id", load.id);
     formData.set("chickType", chickType);
 
+    // Force uppercase before saving, matching AddLoadModal behavior
+    const batchName = formData.get("name") as string;
+    if (batchName) formData.set("name", batchName.toUpperCase().trim());
+
+    const customerName = formData.get("customerName") as string;
+    if (customerName)
+      formData.set("customerName", customerName.toUpperCase().trim());
+
     const rawQuantity = formData.get("quantity") as string;
     if (rawQuantity) formData.set("quantity", rawQuantity.replace(/,/g, ""));
 
@@ -189,6 +197,11 @@ export default function EditLoadModal({
                   <Calendar
                     mode="single"
                     selected={loadDate}
+                    defaultMonth={loadDate || new Date()}
+                    // ---> SHADCN DROPDOWN UPGRADE <---
+                    captionLayout="dropdown"
+                    fromYear={2020}
+                    toYear={new Date().getFullYear()}
                     onSelect={(date) => {
                       setLoadDate(date);
                       setOpenLoadDate(false); // Auto close
@@ -229,6 +242,11 @@ export default function EditLoadModal({
                   <Calendar
                     mode="single"
                     selected={harvestDate}
+                    defaultMonth={harvestDate || new Date()}
+                    // ---> SHADCN DROPDOWN UPGRADE <---
+                    captionLayout="dropdown"
+                    fromYear={2020}
+                    toYear={new Date().getFullYear() + 5} // Allow future planning
                     onSelect={(date) => {
                       setHarvestDate(date);
                       setOpenHarvestDate(false); // Auto close
@@ -251,7 +269,7 @@ export default function EditLoadModal({
                 type="text"
                 defaultValue={load.name || ""}
                 placeholder="e.g. Loading 1"
-                className="rounded-xl h-12 font-bold"
+                className="rounded-xl h-12 font-bold uppercase"
               />
             </div>
 
@@ -322,7 +340,7 @@ export default function EditLoadModal({
                 type="text"
                 defaultValue={load.customerName || load.customer || ""}
                 placeholder="e.g. Magnolia"
-                className="rounded-xl h-12"
+                className="rounded-xl h-12 uppercase"
               />
             </div>
           </div>

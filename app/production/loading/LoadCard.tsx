@@ -8,6 +8,7 @@ import {
   ArrowRight,
   CalendarCheck,
   Wallet,
+  AlertTriangle,
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -55,8 +56,14 @@ export default function LoadCard({ load }: { load: any }) {
   const harvestDateObj = load.harvestDate ? new Date(load.harvestDate) : null;
   const today = new Date();
 
+  // ---> CALCULATE AGE <---
   const diffTime = today.getTime() - loadDateObj.getTime();
   const ageInDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+  // ---> SMART BADGE LOGIC (Assuming 120 Days / 4 Months cycle) <---
+  const targetDays = 120;
+  const isReadyForHarvest = ageInDays >= targetDays;
+  const isApproachingHarvest = ageInDays >= targetDays - 14; // Approaching in 2 weeks
 
   const hasCapital = Number(load.initialCapital) > 0;
 
@@ -74,11 +81,13 @@ export default function LoadCard({ load }: { load: any }) {
     >
       {/* 1. LEFT SECTION */}
       <div className="p-5 lg:p-6 lg:w-[30%] bg-slate-50/50 dark:bg-slate-900/30 border-b lg:border-b-0 lg:border-r border-border/50 flex flex-col justify-center gap-3.5">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <h3 className="text-2xl sm:text-[18px] font-black uppercase tracking-tight text-foreground leading-none">
+        {/* ---> THE FIX: Added flex-wrap and items-start to handle long badge text gracefully <--- */}
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3">
+          <h3 className="text-2xl sm:text-[18px] font-black uppercase tracking-tight text-foreground leading-none truncate">
             {load.buildingName}
           </h3>
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-2">
             <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-widest flex items-center gap-1.5 shrink-0">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -86,20 +95,35 @@ export default function LoadCard({ load }: { load: any }) {
               </span>
               Active
             </span>
-            <div className="bg-blue-600 text-white px-3 py-1 rounded-md flex items-center gap-1.5 shadow-sm shrink-0">
-              <Timer className="w-4 h-4 opacity-90 shrink-0" />
-              <span className="font-black text-xs sm:text-sm tracking-widest whitespace-nowrap uppercase">
-                Day {ageInDays}
+
+            {/* ---> DYNAMIC AGE BADGE <--- */}
+            <div
+              className={cn(
+                "px-3 py-1 rounded-md flex items-center gap-1 shadow-sm shrink-0 transition-colors",
+                isReadyForHarvest
+                  ? "bg-red-600 text-white animate-pulse" // Red if 120+ days
+                  : isApproachingHarvest
+                    ? "bg-amber-500 text-white" // Amber if close (106-119 days)
+                    : "bg-blue-600 text-white", // Blue normally
+              )}
+            >
+              {isReadyForHarvest ? (
+                <AlertTriangle className="w-4 h-4 opacity-90 shrink-0" />
+              ) : (
+                <Timer className="w-4 h-4 opacity-90 shrink-0" />
+              )}
+              <span className="font-black text-xs sm:text-xs tracking-widest whitespace-nowrap uppercase">
+                {isReadyForHarvest ? "READY TO HARVEST" : `Day ${ageInDays}`}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-border/50 px-3 py-1.5 rounded-lg w-fit shadow-sm mt-0.5">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 whitespace-nowrap">
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-950 border border-border/50 px-3 py-1.5 rounded-lg w-fit shadow-sm mt-0.5 max-w-full overflow-hidden">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 whitespace-nowrap shrink-0">
             Batch Name:
           </span>
-          <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 whitespace-nowrap">
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 truncate">
             {load.name || "UNNAMED BATCH"}
           </span>
         </div>
@@ -113,11 +137,11 @@ export default function LoadCard({ load }: { load: any }) {
               height={16}
               className="object-contain dark:invert opacity-70 shrink-0"
             />
-            <p className="text-[11px] xl:text-xs font-bold text-emerald-600 dark:text-emerald-500 uppercase tracking-widest">
+            <p className="text-[11px] xl:text-xs font-bold text-emerald-600 dark:text-emerald-500 uppercase tracking-widest truncate">
               {load.chickType || "Standard Breed"}
             </p>
           </div>
-          <div className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] xl:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest shrink-0">
             <div className="flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5 shrink-0" />
               <span className="whitespace-nowrap">
@@ -126,8 +150,15 @@ export default function LoadCard({ load }: { load: any }) {
             </div>
             {harvestDateObj && (
               <>
-                <ArrowRight className="w-3 h-3 opacity-50 shrink-0" />
-                <div className="flex items-center gap-1 text-emerald-600/70 dark:text-emerald-500/70">
+                <ArrowRight className="w-3 h-3 opacity-50 shrink-0 hidden sm:block" />
+                <div
+                  className={cn(
+                    "flex items-center gap-1",
+                    isReadyForHarvest
+                      ? "text-red-600 dark:text-red-500 font-black" // Highlights harvest date if ready
+                      : "text-emerald-600/70 dark:text-emerald-500/70",
+                  )}
+                >
                   <CalendarCheck className="w-3.5 h-3.5 shrink-0" />
                   <span className="whitespace-nowrap">
                     {format(harvestDateObj, "MMM d, yyyy")}

@@ -275,11 +275,22 @@ export default function AddFeedDeliveryModal({
                   <Calendar
                     mode="single"
                     selected={deliveryDate}
+                    defaultMonth={deliveryDate || new Date()}
+                    // ---> SHADCN DROPDOWN UPGRADE <---
+                    captionLayout="dropdown"
+                    fromYear={2020}
+                    toYear={new Date().getFullYear()}
                     onSelect={(date) => {
                       setDeliveryDate(date);
-                      setIsCalendarOpen(false);
+                      setIsCalendarOpen(false); // Auto close
                     }}
-                    disabled={(date) => date > new Date()} // <--- UI PROTECTION: Disables future dates
+                    disabled={(date) => {
+                      // Block Future Dates!
+                      const today = new Date();
+                      today.setHours(23, 59, 59, 999);
+                      if (date > today) return true;
+                      return false;
+                    }}
                     initialFocus
                   />
                 </PopoverContent>
@@ -308,7 +319,7 @@ export default function AddFeedDeliveryModal({
                     <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
+                <PopoverContent className="w-full p-0 z-200" align="start">
                   <Command>
                     <CommandInput
                       placeholder="Search or type new..."

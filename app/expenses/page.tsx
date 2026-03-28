@@ -10,7 +10,7 @@ import {
   users,
   harvestRecords,
 } from "../../src/db/schema";
-import { desc, eq, and, sql } from "drizzle-orm";
+import { desc, eq, and, or, isNull, sql } from "drizzle-orm";
 import { TrendingDown, Wallet, PieChart, Building2 } from "lucide-react";
 import AddExpenseModal from "./AddExpenseModal";
 import ExpensesTableClient from "./ExpensesTableClient";
@@ -118,17 +118,33 @@ export default async function ExpensesPage(props: {
     .map((str) => JSON.parse(str))
     .sort((a: any, b: any) => b.id - a.id);
 
+  // ==========================================
+  // ---> THE FIX: INTELLIGENT FILTERING <---
+  // ==========================================
   const filters = [];
-  if (selectedFarm && selectedFarm !== "all")
+
+  if (selectedFarm && selectedFarm !== "all") {
     filters.push(eq(farms.name, selectedFarm));
-  if (selectedBuilding && selectedBuilding !== "all")
-    filters.push(eq(buildings.name, selectedBuilding));
-  if (selectedLoad && selectedLoad !== "all")
-    filters.push(eq(expenses.loadId, Number(selectedLoad)));
-  if (selectedType && selectedType !== "all")
+  }
+
+  if (selectedBuilding && selectedBuilding !== "all") {
+    filters.push(
+      or(eq(buildings.name, selectedBuilding), isNull(expenses.loadId)),
+    );
+  }
+
+  if (selectedLoad && selectedLoad !== "all") {
+    filters.push(
+      or(eq(expenses.loadId, Number(selectedLoad)), isNull(expenses.loadId)),
+    );
+  }
+
+  if (selectedType && selectedType !== "all") {
     filters.push(eq(expenses.expenseType, selectedType as any));
-  if (selectedDate && selectedDate !== "all")
+  }
+  if (selectedDate && selectedDate !== "all") {
     filters.push(eq(expenses.expenseDate, selectedDate));
+  }
 
   const finalCondition = filters.length > 0 ? and(...filters) : undefined;
 
@@ -232,8 +248,40 @@ export default async function ExpensesPage(props: {
       };
     });
 
-  const history = enrichHistory(rawHistory);
-  const fullHistory = enrichHistory(rawFullHistory);
+  // ---> THE FIX: Defined `displayLoadName` here so the server filter can read it <---
+  const selectedLoadObj = availableLoads.find(
+    (l: any) => String(l.id) === selectedLoad,
+  );
+  const displayLoadName = selectedLoadObj ? selectedLoadObj.name : "";
+
+  const filterEnrichedHistory = (enrichedRecords: any[]) => {
+    return enrichedRecords.filter((record) => {
+      if (record.loadId) return true;
+
+      if (selectedBuilding && selectedBuilding !== "all") {
+        const buildingIsIncluded = record.sharedWith.some((b: string) =>
+          b.startsWith(selectedBuilding),
+        );
+        if (!buildingIsIncluded) return false;
+      }
+
+      if (selectedLoad && selectedLoad !== "all") {
+        const targetLoadName = displayLoadName;
+        const loadIsIncluded = record.sharedWith.some((b: string) =>
+          b.includes(`(${targetLoadName})`),
+        );
+        if (!loadIsIncluded) return false;
+      }
+
+      return true;
+    });
+  };
+
+  const baseHistory = enrichHistory(rawHistory);
+  const baseFullHistory = enrichHistory(rawFullHistory);
+
+  const history = filterEnrichedHistory(baseHistory);
+  const fullHistory = filterEnrichedHistory(baseFullHistory);
 
   const totalAmount = fullHistory.reduce(
     (sum: number, record: any) => sum + Number(record.amount),

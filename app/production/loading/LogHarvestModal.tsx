@@ -94,31 +94,42 @@ export default function LogHarvestModal({ load }: { load: any }) {
 
   useEffect(() => {
     if (isOpen) {
-      setFetchingData(true);
-      setHarvestQuantity("");
-      setSellingPriceInput(load.sellingPrice?.toString() || "");
-      setHarvestDate(new Date());
-      setIsManualClose(false);
-      setAutoFillKey(0);
+      // Only reset data if we aren't currently showing the success screen
+      if (!successData) {
+        setFetchingData(true);
+        setHarvestQuantity("");
+        setSellingPriceInput(load.sellingPrice?.toString() || "");
+        setHarvestDate(new Date());
+        setIsManualClose(false);
+        setAutoFillKey(0);
 
-      Promise.all([
-        getLiveBirdCount(load.id),
-        getLoadTotalExpensesForHarvest(load.id),
-      ]).then(([count, expenses]) => {
-        setAvailableBirds(count);
-        setTotalExpenses(expenses);
-        setFetchingData(false);
-      });
-
-      if (leftoverFeedsQty > 0) {
-        fetchOtherBuildingsInFarm(load.farmName, load.id).then((data) => {
-          setOtherActiveLoads(data);
+        Promise.all([
+          getLiveBirdCount(load.id),
+          getLoadTotalExpensesForHarvest(load.id),
+        ]).then(([count, expenses]) => {
+          setAvailableBirds(count);
+          setTotalExpenses(expenses);
+          setFetchingData(false);
         });
+
+        if (leftoverFeedsQty > 0) {
+          fetchOtherBuildingsInFarm(load.farmName, load.id).then((data) => {
+            setOtherActiveLoads(data);
+          });
+        }
       }
     } else {
+      // Only clear success data AFTER the modal has fully closed visually
       setTimeout(() => setSuccessData(null), 300);
     }
-  }, [isOpen, load.id, load.sellingPrice, leftoverFeedsQty, load.farmName]);
+  }, [
+    isOpen,
+    load.id,
+    load.sellingPrice,
+    leftoverFeedsQty,
+    load.farmName,
+    successData,
+  ]);
 
   const isAutoFinalHarvest =
     availableBirds !== null &&
@@ -194,6 +205,7 @@ export default function LogHarvestModal({ load }: { load: any }) {
     if (result.error) {
       toast.error(result.error);
     } else {
+      // ---> THE FIX: Set success data but DO NOT close the modal yet! <---
       setSuccessData(result);
       if (isClosingBuilding && leftoverFeedsQty > 0) {
         toast.success("Batch Closed & Feeds Transferred!", {
@@ -204,13 +216,21 @@ export default function LogHarvestModal({ load }: { load: any }) {
     setLoading(false);
   }
 
+  // ---> THE FIX: Explicit close and refresh function <---
   function handleCloseAndRefresh() {
     setIsOpen(false);
     router.refresh();
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        // Prevent accidental closing if the success screen is showing
+        if (!open && successData) return;
+        setIsOpen(open);
+      }}
+    >
       <DialogTrigger asChild>
         <Button
           variant="outline"
@@ -223,8 +243,11 @@ export default function LogHarvestModal({ load }: { load: any }) {
 
       <DialogContent
         onInteractOutside={(e) => {
+          // Force them to click the button if on success screen
           if (successData) e.preventDefault();
         }}
+        // Force them to click the button if on success screen (hide X)
+        showCloseButton={!successData}
         className="max-w-md rounded-[2rem] p-0 overflow-y-auto max-h-[90vh] no-scrollbar border-border/50 shadow-2xl"
       >
         {successData ? (
@@ -369,6 +392,12 @@ export default function LogHarvestModal({ load }: { load: any }) {
                       <Calendar
                         mode="single"
                         selected={harvestDate}
+                        defaultMonth={harvestDate || new Date()}
+                        captionLayout="dropdown"
+                        fromYear={
+                          safeLoadDateObj ? safeLoadDateObj.getFullYear() : 2020
+                        }
+                        toYear={new Date().getFullYear()}
                         onSelect={(date) => {
                           setHarvestDate(date);
                           setIsCalendarOpen(false); // Auto close

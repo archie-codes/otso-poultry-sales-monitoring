@@ -42,11 +42,12 @@ export default async function DailyMonitoringPage(props: {
   const allLoadsRaw = await db
     .select({
       id: loads.id,
+      name: loads.name, // <--- THE FIX: Explicitly fetch the batch name from the DB!
       quantity: loads.actualQuantityLoad,
       buildingName: buildings.name,
       farmName: farms.name,
       isActive: loads.isActive,
-      loadDate: loads.loadDate, // <--- ADDED: Needed for the Date Blocker in the Modal
+      loadDate: loads.loadDate,
     })
     .from(loads)
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
