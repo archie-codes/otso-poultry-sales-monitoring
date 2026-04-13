@@ -28,15 +28,19 @@ import { cn } from "@/lib/utils";
 
 const HenIcon = ({ className }: { className?: string }) => {
   return (
-    <span
-      className={`relative block h-[18px] w-[18px] shrink-0 ${className ?? ""}`}
-    >
-      <Image
-        src={henIcon}
-        alt="Hen"
-        fill
-        sizes="18px"
-        className="object-contain brightness-0 invert opacity-90"
+    <span className={cn("relative block h-[18px] w-[18px] shrink-0", className)}>
+      <span
+        className="absolute inset-0 bg-current transition-colors duration-200"
+        style={{
+          WebkitMaskImage: `url(${henIcon.src})`,
+          maskImage: `url(${henIcon.src})`,
+          WebkitMaskSize: "contain",
+          maskSize: "contain",
+          WebkitMaskRepeat: "no-repeat",
+          maskRepeat: "no-repeat",
+          WebkitMaskPosition: "center",
+          maskPosition: "center",
+        }}
       />
     </span>
   );
@@ -158,16 +162,15 @@ export default function Sidebar({
   return (
     <div
       className={cn(
-        "hidden md:flex flex-col h-full shadow-[4px_0_24px_rgba(4,120,87,0.15)] z-20 transition-all duration-300 ease-in-out relative border-r border-emerald-700/50",
-        // ---> ANIMATED GREEN GRADIENT <---
-        "bg-linear-to-br from-green-800 via-emerald-600 to-green-900 animate-bg-gradient text-emerald-50",
+        "hidden md:flex flex-col h-full z-20 transition-all duration-300 ease-in-out relative border-r border-slate-200/60 dark:border-[#1e293b]/80",
+        "bg-background dark:bg-[#0B1121]", // Premium pale sage/emerald for light, deep navy for dark
         isExpanded ? "w-[260px]" : "w-[80px]",
       )}
     >
       {/* Brand Header */}
       <div
         className={cn(
-          "h-16 flex items-center border-b border-white/20 hover:bg-white/10 transition-colors cursor-pointer shrink-0 overflow-hidden backdrop-blur-sm",
+          "h-16 flex items-center border-b border-border hover:bg-muted/50 transition-colors cursor-pointer shrink-0 overflow-hidden",
           isExpanded ? "px-6" : "px-0 justify-center",
         )}
       >
@@ -176,14 +179,13 @@ export default function Sidebar({
             src="/logo.png"
             alt="Logo"
             fill
-            // NO INVERT OR BRIGHTNESS FILTER HERE! True colors shine through.
-            className="object-contain drop-shadow-md"
+            className="object-contain drop-shadow-sm"
             priority
           />
         </div>
         <span
           className={cn(
-            "font-black text-lg tracking-tight text-white transition-opacity duration-300 whitespace-nowrap ml-3 drop-shadow-md",
+            "font-black text-lg tracking-tight text-foreground transition-opacity duration-300 whitespace-nowrap ml-3 drop-shadow-sm",
             isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden",
           )}
         >
@@ -197,12 +199,12 @@ export default function Sidebar({
           <div key={group.label} className="flex flex-col gap-1 w-full">
             {/* Category Header */}
             {isExpanded ? (
-              <h3 className="px-7 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200 mb-1 truncate transition-opacity duration-300">
+              <h3 className="px-7 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-1 truncate transition-opacity duration-300">
                 {group.label}
               </h3>
             ) : (
               <div className="h-4 flex justify-center mb-1">
-                <div className="w-4 h-0.5 bg-white/20 rounded-full" />
+                <div className="w-4 h-0.5 bg-border rounded-full" />
               </div>
             )}
 
@@ -229,13 +231,13 @@ export default function Sidebar({
                       <button
                         onClick={() => toggleMenu(item.name)}
                         className={cn(
-                          "flex items-center py-2.5 rounded-xl transition-all duration-200 group w-full outline-none border border-transparent",
+                          "flex items-center py-2.5 rounded-xl transition-all duration-200 group w-full outline-none",
                           isExpanded
                             ? "px-4 justify-between"
                             : "px-0 justify-center",
                           isAnySubActive
-                            ? "bg-white/20 text-white font-bold border-white/10 shadow-sm backdrop-blur-md"
-                            : "text-emerald-50 hover:bg-white/10 hover:text-white font-medium",
+                            ? "bg-indigo-600 dark:bg-indigo-500/20 text-white dark:text-indigo-400 font-bold shadow-md"
+                            : "text-muted-foreground hover:bg-indigo-50/80 dark:hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-300 font-medium",
                         )}
                         title={!isExpanded ? item.name : undefined}
                       >
@@ -243,11 +245,13 @@ export default function Sidebar({
                           <item.icon
                             className={cn(
                               "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
-                              isAnySubActive ? "text-white" : "opacity-90",
+                              isAnySubActive
+                                ? "text-white dark:text-indigo-400"
+                                : "opacity-90 group-hover:text-indigo-600 dark:group-hover:text-indigo-300",
                             )}
                           />
                           {isExpanded && (
-                            <span className="text-sm truncate">
+                            <span className="text-sm truncate transition-transform duration-300 group-hover:translate-x-1">
                               {item.name}
                             </span>
                           )}
@@ -256,7 +260,9 @@ export default function Sidebar({
                           <ChevronDown
                             className={cn(
                               "h-4 w-4 transition-transform duration-200 opacity-70",
-                              isMenuOpen ? "rotate-180 text-white" : "",
+                              isMenuOpen
+                                ? "rotate-180 text-white dark:text-indigo-400"
+                                : "group-hover:text-indigo-600 dark:group-hover:text-indigo-300",
                             )}
                           />
                         )}
@@ -264,7 +270,7 @@ export default function Sidebar({
 
                       {/* Sub Items */}
                       {isExpanded && isMenuOpen && (
-                        <div className="flex flex-col gap-1 pl-4 mt-1 border-l-2 border-white/20 ml-6 animate-in slide-in-from-top-2 fade-in duration-200">
+                        <div className="flex flex-col gap-1 pl-4 mt-1 border-l-2 border-border ml-6 animate-in slide-in-from-top-2 fade-in duration-200">
                           {item.subItems.map((subItem) => {
                             const subStrictActive = pathname === subItem.href;
                             return (
@@ -274,12 +280,12 @@ export default function Sidebar({
                                 className={cn(
                                   "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group",
                                   subStrictActive
-                                    ? "bg-white/15 text-white font-bold shadow-sm"
-                                    : "text-emerald-100/80 hover:text-white text-sm font-medium hover:bg-white/10",
+                                    ? "bg-indigo-600 dark:bg-indigo-500/20 text-white dark:text-indigo-400 font-bold shadow-md"
+                                    : "text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-300 text-sm font-medium hover:bg-indigo-50/50 dark:hover:bg-indigo-500/10",
                                 )}
                               >
                                 <subItem.icon className="h-3.5 w-3.5" />
-                                <span className="text-[13px] truncate">
+                                <span className="text-[13px] truncate transition-transform duration-300 group-hover:translate-x-1">
                                   {subItem.name}
                                 </span>
                               </Link>
@@ -300,24 +306,26 @@ export default function Sidebar({
                       "flex items-center py-2.5 rounded-xl transition-all duration-200 group relative border",
                       isExpanded ? "px-4" : "px-0 justify-center",
                       isStrictActive
-                        ? "bg-white/20 text-white font-bold border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.1)] backdrop-blur-md"
-                        : "border-transparent text-emerald-50 hover:bg-white/10 hover:text-white font-medium",
+                        ? "bg-indigo-600 dark:bg-indigo-500/20 text-white dark:text-indigo-400 font-bold border-indigo-500 dark:border-indigo-500/30 shadow-md"
+                        : "border-transparent text-muted-foreground hover:bg-indigo-50/80 dark:hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-300 font-medium",
                     )}
                     title={!isExpanded ? item.name : undefined}
                   >
                     <item.icon
                       className={cn(
                         "h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110",
-                        isStrictActive ? "text-white" : "opacity-90",
+                        isStrictActive
+                          ? "text-white dark:text-indigo-400"
+                          : "opacity-90 group-hover:text-indigo-600 dark:group-hover:text-indigo-300",
                       )}
                     />
                     {isExpanded && (
-                      <span className="text-sm ml-3 truncate">{item.name}</span>
+                      <span className="text-sm ml-3 truncate transition-transform duration-300 group-hover:translate-x-1">{item.name}</span>
                     )}
 
                     {/* Active Indicator Dot (Only shows when collapsed) */}
                     {!isExpanded && isStrictActive && (
-                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
+                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-white dark:bg-indigo-400 rounded-full shadow-sm" />
                     )}
                   </Link>
                 );
@@ -328,11 +336,11 @@ export default function Sidebar({
       </div>
 
       {/* Footer / Toggle & Logout */}
-      <div className="p-3 border-t border-white/20 bg-black/10 flex flex-col gap-2 shrink-0 backdrop-blur-md">
+      <div className="p-3 border-t border-border bg-muted/30 flex flex-col gap-2 shrink-0">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className={cn(
-            "flex items-center text-emerald-100/70 hover:text-white hover:bg-white/10 transition-colors py-2 rounded-xl group",
+            "flex items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors py-2 rounded-xl group",
             isExpanded ? "px-4 justify-between" : "justify-center",
           )}
         >
@@ -351,7 +359,7 @@ export default function Sidebar({
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
           className={cn(
-            "flex items-center gap-3 py-2.5 rounded-xl text-emerald-100/80 hover:bg-red-500/30 hover:text-red-100 font-medium transition-colors group border border-transparent hover:border-red-500/50",
+            "flex items-center gap-3 py-2.5 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive font-medium transition-colors group border border-transparent hover:border-destructive/20",
             isExpanded ? "px-4 w-full" : "justify-center",
           )}
           title={!isExpanded ? "Log Out" : undefined}

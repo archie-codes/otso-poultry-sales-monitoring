@@ -41,15 +41,19 @@ import { cn } from "@/lib/utils";
 
 const HenIcon = ({ className }: { className?: string }) => {
   return (
-    <span
-      className={`relative block h-[18px] w-[18px] shrink-0 ${className ?? ""}`}
-    >
-      <Image
-        src={henIcon}
-        alt="Hen"
-        fill
-        sizes="18px"
-        className="object-contain brightness-0 invert opacity-90"
+    <span className={cn("relative block h-[18px] w-[18px] shrink-0", className)}>
+      <span
+        className="absolute inset-0 bg-current transition-colors duration-200"
+        style={{
+          WebkitMaskImage: `url(${henIcon.src})`,
+          maskImage: `url(${henIcon.src})`,
+          WebkitMaskSize: "contain",
+          maskSize: "contain",
+          WebkitMaskRepeat: "no-repeat",
+          maskRepeat: "no-repeat",
+          WebkitMaskPosition: "center",
+          maskPosition: "center",
+        }}
       />
     </span>
   );
@@ -183,7 +187,7 @@ export default function Navbar({
   };
 
   return (
-    <header className="h-16 border-b border-border/50 bg-background/50 backdrop-blur-xl flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
+    <header className="h-16 border-b border-slate-200/60 dark:border-[#1e293b]/80 bg-background dark:bg-[#0B1121]/80 backdrop-blur-2xl flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
       <div className="flex items-center gap-4">
         {/* MOBILE HAMBURGER MENU */}
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -196,23 +200,22 @@ export default function Navbar({
 
           <SheetContent
             side="left"
-            className="w-[280px] p-0 flex flex-col border-r border-emerald-700/50 bg-linear-to-br from-green-800 via-emerald-600 to-green-900 animate-bg-gradient text-emerald-50"
+            className="w-[280px] p-0 flex flex-col border-r border-slate-200/60 dark:border-[#1e293b]/80 bg-background dark:bg-[#0B1121]"
           >
             <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
 
             {/* ---> BRAND HEADER (Matches Sidebar) <--- */}
-            <div className="h-16 flex items-center px-6 border-b border-white/20 shrink-0 overflow-hidden bg-black/10 backdrop-blur-sm">
+            <div className="h-16 flex items-center px-6 border-b border-border hover:bg-muted/50 transition-colors shrink-0 overflow-hidden">
               <div className="relative h-8 w-8 shrink-0 flex items-center justify-center mr-3">
                 <Image
                   src="/logo.png"
                   alt="Otso Poultry Logo"
                   fill
-                  // NO INVERT OR BRIGHTNESS FILTER HERE! True colors shine through.
-                  className="object-contain drop-shadow-md"
+                  className="object-contain drop-shadow-sm"
                   priority
                 />
               </div>
-              <span className="font-black text-lg tracking-tight text-white whitespace-nowrap drop-shadow-md">
+              <span className="font-black text-lg tracking-tight text-foreground whitespace-nowrap drop-shadow-sm">
                 Otso Poultry
               </span>
             </div>
@@ -221,7 +224,7 @@ export default function Navbar({
             <div className="flex-1 py-6 flex flex-col gap-6 px-4 overflow-y-auto custom-scrollbar overflow-x-hidden">
               {navGroups.map((group) => (
                 <div key={group.label} className="flex flex-col gap-1 w-full">
-                  <h3 className="px-3 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200 mb-1 truncate transition-opacity duration-300">
+                  <h3 className="px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1 truncate transition-opacity duration-300">
                     {group.label}
                   </h3>
 
@@ -243,10 +246,10 @@ export default function Navbar({
                             <button
                               onClick={() => toggleMenu(item.name)}
                               className={cn(
-                                "flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group w-full outline-none border border-transparent",
+                                "flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-200 group w-full outline-none",
                                 isAnySubActive
-                                  ? "bg-white/20 text-white font-bold border-white/10 shadow-sm backdrop-blur-md"
-                                  : "text-emerald-50 hover:bg-white/10 hover:text-white font-medium",
+                                  ? "bg-indigo-600 dark:bg-indigo-500/20 text-white dark:text-indigo-400 font-bold shadow-md"
+                                  : "text-muted-foreground hover:bg-indigo-50/80 dark:hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-300 font-medium",
                               )}
                             >
                               <div className="flex items-center gap-3">
@@ -254,25 +257,25 @@ export default function Navbar({
                                   className={cn(
                                     "h-5 w-5 transition-transform duration-200 group-hover:scale-110",
                                     isAnySubActive
-                                      ? "text-white"
-                                      : "opacity-90",
+                                      ? "text-white dark:text-indigo-400"
+                                      : "opacity-90 group-hover:text-indigo-600 dark:group-hover:text-indigo-300",
                                   )}
                                 />
-                                <span className="text-sm truncate">
+                                <span className="text-sm truncate transition-transform duration-300 group-hover:translate-x-1">
                                   {item.name}
                                 </span>
                               </div>
                               <ChevronDown
                                 className={cn(
                                   "h-4 w-4 transition-transform duration-200 opacity-70",
-                                  isMenuOpen ? "rotate-180 text-white" : "",
+                                  isMenuOpen ? "rotate-180 text-white dark:text-indigo-400" : "group-hover:text-indigo-600 dark:group-hover:text-indigo-300",
                                 )}
                               />
                             </button>
 
                             {/* Sub Items */}
                             {isMenuOpen && (
-                              <div className="flex flex-col gap-1 pl-4 mt-1 border-l-2 border-white/20 ml-6 animate-in slide-in-from-top-2 fade-in duration-200">
+                              <div className="flex flex-col gap-1 pl-4 mt-1 border-l-2 border-border ml-6 animate-in slide-in-from-top-2 fade-in duration-200">
                                 {item.subItems.map((subItem) => {
                                   const isStrictActive =
                                     pathname === subItem.href;
@@ -284,12 +287,12 @@ export default function Navbar({
                                       className={cn(
                                         "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group",
                                         isStrictActive
-                                          ? "bg-white/15 text-white font-bold shadow-sm"
-                                          : "text-emerald-100/80 hover:text-white text-sm font-medium hover:bg-white/10",
+                                          ? "bg-indigo-600 dark:bg-indigo-500/20 text-white dark:text-indigo-400 font-bold shadow-md"
+                                          : "text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-300 text-sm font-medium hover:bg-indigo-50/50 dark:hover:bg-indigo-500/10",
                                       )}
                                     >
                                       <subItem.icon className="h-3.5 w-3.5" />
-                                      <span className="text-[13px] truncate">
+                                      <span className="text-[13px] truncate transition-transform duration-300 group-hover:translate-x-1">
                                         {subItem.name}
                                       </span>
                                     </Link>
@@ -318,17 +321,17 @@ export default function Navbar({
                           className={cn(
                             "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative border",
                             isStrictActive
-                              ? "bg-white/20 text-white font-bold border-white/10 shadow-[0_4px_12px_rgba(0,0,0,0.1)] backdrop-blur-md"
-                              : "border-transparent text-emerald-50 hover:bg-white/10 hover:text-white font-medium",
+                              ? "bg-indigo-600 dark:bg-indigo-500/20 text-white dark:text-indigo-400 font-bold border-indigo-500 dark:border-indigo-500/30 shadow-md"
+                              : "border-transparent text-muted-foreground hover:bg-indigo-50/80 dark:hover:bg-indigo-500/10 hover:text-indigo-600 dark:hover:text-indigo-300 font-medium",
                           )}
                         >
                           <item.icon
                             className={cn(
                               "h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110",
-                              isStrictActive ? "text-white" : "opacity-90",
+                              isStrictActive ? "text-white dark:text-indigo-400" : "opacity-90 group-hover:text-indigo-600 dark:group-hover:text-indigo-300",
                             )}
                           />
-                          <span className="text-sm truncate">{item.name}</span>
+                          <span className="text-sm truncate transition-transform duration-300 group-hover:translate-x-1">{item.name}</span>
                         </Link>
                       );
                     })}
@@ -338,13 +341,13 @@ export default function Navbar({
             </div>
 
             {/* ---> FOOTER <--- */}
-            <div className="p-3 border-t border-white/20 bg-black/10 shrink-0 backdrop-blur-md">
+            <div className="p-3 border-t border-border bg-muted/30 shrink-0">
               <button
                 onClick={() => {
                   setIsOpen(false);
                   signOut({ callbackUrl: "/login" });
                 }}
-                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-emerald-100/80 hover:bg-red-500/30 hover:text-red-100 font-medium transition-colors group border border-transparent hover:border-red-500/50"
+                className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive font-medium transition-colors group border border-transparent hover:border-destructive/20"
               >
                 <LogOut className="h-5 w-5 shrink-0 group-hover:-translate-x-1 transition-transform" />
                 <span className="text-sm truncate">Log out securely</span>
