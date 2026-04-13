@@ -34,12 +34,21 @@ const formatMoneyPDF = (amount: number) =>
 
 export default function HistoricalBatchCard({ batch }: { batch: any }) {
   // =========================================================================
-  // THE ENTERPRISE PDF GENERATOR
+  // THE ENTERPRISE PDF GENERATOR (LANDSCAPE)
   // =========================================================================
   const generatePDF = () => {
-    const doc = new jsPDF("portrait");
+    // 1. SWITCH TO LANDSCAPE
+    const doc = new jsPDF("landscape");
+    const pageHeight = doc.internal.pageSize.height;
 
-    // HEADER
+    const checkPageBreak = (currentY: number, requiredSpace: number) => {
+      if (currentY + requiredSpace > pageHeight - 20) {
+        doc.addPage();
+        return 20;
+      }
+      return currentY;
+    };
+
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
     doc.text("Otso Poultry Farm", 14, 20);
@@ -54,11 +63,12 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
     doc.text(`Building: ${batch.buildingName}`, 14, 44);
     doc.text(`Load/Batch ID: ${batch.name || `Load ${batch.id}`}`, 14, 50);
 
-    doc.text(`Load Date: ${batch.loadDateStr}`, 120, 38);
-    doc.text(`Harvest Date: ${batch.actualHarvestDate}`, 120, 44);
-    doc.text(`Total Age: ${batch.ageInDays} Days`, 120, 50);
+    // 2. PUSH HEADER TEXT TO THE RIGHT (From x=120 to x=220)
+    doc.text(`Load Date: ${batch.loadDateStr}`, 220, 38);
+    doc.text(`Harvest Date: ${batch.actualHarvestDate}`, 220, 44);
+    doc.text(`Total Age: ${batch.ageInDays} Days`, 220, 50);
 
-    // EXECUTIVE SUMMARY (ROI & Totals)
+    // 1. EXECUTIVE SUMMARY TABLE
     autoTable(doc, {
       startY: 55,
       head: [["Performance Metric", "Value", "Financial Metric", "Amount"]],
@@ -89,12 +99,12 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
         ],
       ],
       theme: "grid",
-      headStyles: { fillColor: [15, 23, 42] },
+      headStyles: { fillColor: [15, 23, 42] }, // Slate 900
       styles: { fontSize: 9 },
     });
 
     // NET SALES HIGHLIGHT
-    const finalY = (doc as any).lastAutoTable.finalY || 55;
+    let currentY = (doc as any).lastAutoTable.finalY || 55;
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(
@@ -105,14 +115,15 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
     doc.text(
       `FINAL NET SALES: ${formatMoneyPDF(batch.totalNetSales)}`,
       14,
-      finalY + 10,
+      currentY + 10,
     );
     doc.setTextColor(0, 0, 0); // Reset
 
-    // FEED EXPENSES TABLE
+    // 2. FEED EXPENSES TABLE
+    currentY = checkPageBreak(currentY, 30);
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Feed Consumption Log", 14, finalY + 25);
+    doc.text("Feed Consumption Log", 14, currentY + 25);
 
     const feedRows = batch.pdfPayload.feeds.map((f: any) => [
       format(new Date(f.date), "MMM d, yyyy"),
@@ -122,43 +133,70 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
     ]);
 
     autoTable(doc, {
-      startY: finalY + 30,
+      startY: currentY + 30,
       head: [["Date", "Feed Type", "Qty", "Calculated Cost"]],
       body:
         feedRows.length > 0 ? feedRows : [["No feeds logged", "-", "-", "-"]],
       theme: "grid",
       headStyles: { fillColor: [245, 158, 11] }, // Amber
-      styles: { fontSize: 8 },
+      styles: { fontSize: 8, cellPadding: 2 },
+      // 3. EXPANDED WIDTHS FOR LANDSCAPE (~265mm total usable width)
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 160 }, // Massive space for long feed names/remarks
+        2: { cellWidth: 35 },
+        3: { cellWidth: 40, halign: "right" },
+      },
     });
 
-    // OTHER EXPENSES TABLE
-    const expY = (doc as any).lastAutoTable.finalY || finalY + 30;
+    currentY = (doc as any).lastAutoTable.finalY;
+
+    // 3. OTHER EXPENSES TABLE
+    currentY = checkPageBreak(currentY, 30);
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Direct & Shared Expenses", 14, expY + 15);
+    doc.text("Direct & Shared Expenses", 14, currentY + 15);
 
-    const expRows = batch.pdfPayload.expenses.map((e: any) => [
-      format(new Date(e.date), "MMM d, yyyy"),
-      e.type,
-      e.remarks || "-",
-      formatMoneyPDF(e.amount),
-    ]);
+    // ---> NEW: Clean up the remarks for the PDF <---
+    const expRows = batch.pdfPayload.expenses.map((e: any) => {
+      let cleanRemarks = e.remarks ? e.remarks.replace(/[₱±]/g, "PHP ") : "-";
+      cleanRemarks = cleanRemarks.replace(
+        /\.\s*(Total (Loaded|Added):)/gi,
+        ".\n$1",
+      );
+
+      return [
+        format(new Date(e.date), "MMM d, yyyy"),
+        e.type,
+        cleanRemarks,
+        formatMoneyPDF(e.amount),
+      ];
+    });
 
     autoTable(doc, {
-      startY: expY + 20,
+      startY: currentY + 20,
       head: [["Date", "Expense Type", "Remarks", "Amount"]],
       body:
         expRows.length > 0 ? expRows : [["No expenses logged", "-", "-", "-"]],
       theme: "grid",
       headStyles: { fillColor: [59, 130, 246] }, // Blue
-      styles: { fontSize: 8 },
+      styles: { fontSize: 8, cellPadding: 2 },
+      // 3. EXPANDED WIDTHS FOR LANDSCAPE
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 155 }, // The Remarks column gets 155mm to stretch out!
+        3: { cellWidth: 40, halign: "right" },
+      },
     });
 
-    // MORTALITY LOG TABLE WITH AM & PM
-    const mortY = (doc as any).lastAutoTable.finalY || expY + 30;
+    currentY = (doc as any).lastAutoTable.finalY;
+
+    // 4. MORTALITY LOG TABLE WITH AM & PM
+    currentY = checkPageBreak(currentY, 30);
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Daily Mortality Breakdown", 14, mortY + 15);
+    doc.text("Daily Mortality Breakdown", 14, currentY + 15);
 
     const mortalityRows = (batch.pdfPayload.mortalityLog || []).map(
       (m: any) => [
@@ -171,7 +209,7 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
     );
 
     autoTable(doc, {
-      startY: mortY + 20,
+      startY: currentY + 20,
       head: [["Date", "AM", "PM", "Total", "Remarks"]],
       body:
         mortalityRows.length > 0
@@ -179,7 +217,14 @@ export default function HistoricalBatchCard({ batch }: { batch: any }) {
           : [["No mortality logged", "0", "0", "0 Heads", "-"]],
       theme: "grid",
       headStyles: { fillColor: [220, 38, 38] }, // Red
-      styles: { fontSize: 8 },
+      styles: { fontSize: 8, halign: "center", cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "left", cellWidth: 30 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 30 },
+        4: { halign: "left", cellWidth: 145 }, // Remarks gets leftover space
+      },
     });
 
     doc.save(`End_of_Flock_Report_${batch.farmName}_${batch.buildingName}.pdf`);

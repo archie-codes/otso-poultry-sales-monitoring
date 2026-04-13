@@ -86,17 +86,7 @@ export default function ViewHistoryModal({
               {load.buildingName} • {load.name}
             </p>
           </div>
-          {/* <Button
-            onClick={handleExport}
-            disabled={loading || timeline.length === 0}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-10 shadow-sm transition-all"
-          >
-            <Download className="w-4 h-4 mr-2" /> Export CSV
-          </Button> */}
         </div>
-
-        {/* TIMELINE BODY - FIXED HEIGHT FOR 3 ITEMS */}
-        {/* max-h-[380px] perfectly fits ~3 items. Any more will trigger the scrollbar! */}
         <div className="p-6 md:p-8 max-h-[380px] overflow-y-auto overflow-x-hidden bg-card scroll-smooth pr-4 md:pr-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 opacity-50">

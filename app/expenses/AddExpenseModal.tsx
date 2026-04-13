@@ -56,7 +56,8 @@ const EXPENSE_CATEGORIES = [
   { label: "Fuel / Gas / Diesel", value: "fuel" },
   { label: "Labor / Salary", value: "labor" },
   { label: "Maintenance / Truck", value: "maintenance" },
-  { label: "Miscellaneous / Meals", value: "miscellaneous" },
+  // ---> THE FIX: Changed the label to include "Others", but kept value as "miscellaneous" for the DB <---
+  { label: "Others / Miscellaneous", value: "miscellaneous" },
   { label: "Multivitamins & Medicine", value: "medicine" },
   { label: "Vaccine", value: "vaccine" },
   { label: "Antibiotics", value: "antibiotics" },
@@ -117,7 +118,7 @@ export default function AddExpenseModal({
   } else if (expenseType === "maintenance") {
     remarksPlaceholder = "e.g. REPAIR BUILDING 1 WATER PUMP";
   } else if (expenseType === "miscellaneous") {
-    remarksPlaceholder = "e.g. STAFF LUNCH / HARDWARE SUPPLIES";
+    remarksPlaceholder = "e.g. OTHERS / STAFF LUNCH / HARDWARE SUPPLIES";
   } else if (isMedical) {
     remarksPlaceholder = "e.g. ADMINISTERED VIA DRINKING WATER";
   }

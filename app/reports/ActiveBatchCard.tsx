@@ -37,17 +37,17 @@ export default function ActiveBatchCard({ report }: { report: any }) {
   const isApproachingHarvest = report.ageInDays >= targetDays - 14; // Approaching in 2 weeks
 
   // =========================================================================
-  // THE INTERIM PDF GENERATOR
+  // THE INTERIM PDF GENERATOR (LANDSCAPE)
   // =========================================================================
   const generatePDF = () => {
-    const doc = new jsPDF("portrait");
+    // 1. SWITCH TO LANDSCAPE
+    const doc = new jsPDF("landscape");
     const pageHeight = doc.internal.pageSize.height;
 
-    // Helper function to prevent headers from printing off the bottom of the page
     const checkPageBreak = (currentY: number, requiredSpace: number) => {
       if (currentY + requiredSpace > pageHeight - 20) {
         doc.addPage();
-        return 20; // Return new Y starting position
+        return 20;
       }
       return currentY;
     };
@@ -68,18 +68,18 @@ export default function ActiveBatchCard({ report }: { report: any }) {
     doc.text(`Building: ${report.buildingName}`, 14, 44);
     doc.text(`Load/Batch ID: ${report.name || `Load ${report.id}`}`, 14, 50);
 
-    doc.text(`Load Date: ${report.loadDateStr}`, 120, 38);
+    // 2. PUSH HEADER TEXT TO THE RIGHT (From x=120 to x=220)
+    doc.text(`Load Date: ${report.loadDateStr}`, 220, 38);
 
-    // Updates PDF Status based on the age logic
     if (isReadyForHarvest) {
-      doc.setTextColor(220, 38, 38); // Red for PDF warning
-      doc.text(`Current Status: READY FOR HARVEST`, 120, 44);
+      doc.setTextColor(220, 38, 38);
+      doc.text(`Current Status: READY FOR HARVEST`, 220, 44);
       doc.setTextColor(0, 0, 0);
     } else {
-      doc.text(`Current Status: Active`, 120, 44);
+      doc.text(`Current Status: Active`, 220, 44);
     }
 
-    doc.text(`Current Age: ${report.ageInDays} Days`, 120, 50);
+    doc.text(`Current Age: ${report.ageInDays} Days`, 220, 50);
 
     // 1. EXECUTIVE SUMMARY TABLE
     autoTable(doc, {
@@ -119,7 +119,7 @@ export default function ActiveBatchCard({ report }: { report: any }) {
         ],
       ],
       theme: "grid",
-      headStyles: { fillColor: [37, 99, 235] }, // Blue
+      headStyles: { fillColor: [37, 99, 235] },
       styles: { fontSize: 9 },
     });
 
@@ -146,8 +146,15 @@ export default function ActiveBatchCard({ report }: { report: any }) {
           ? feedRows
           : [["No feeds logged yet", "-", "-", "-"]],
       theme: "grid",
-      headStyles: { fillColor: [245, 158, 11] }, // Amber
-      styles: { fontSize: 8 },
+      headStyles: { fillColor: [245, 158, 11] },
+      styles: { fontSize: 8, cellPadding: 2 },
+      // 3. EXPANDED WIDTHS FOR LANDSCAPE (~265mm total usable width)
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 160 }, // Massive space for long feed names/remarks
+        2: { cellWidth: 38 },
+        3: { cellWidth: 40, halign: "right" },
+      },
     });
 
     currentY = (doc as any).lastAutoTable.finalY;
@@ -158,12 +165,21 @@ export default function ActiveBatchCard({ report }: { report: any }) {
     doc.setFont("helvetica", "bold");
     doc.text("Direct & Shared Expenses (To Date)", 14, currentY + 15);
 
-    const expRows = (report.pdfPayload.expenses || []).map((e: any) => [
-      format(new Date(e.date), "MMM d, yyyy"),
-      e.type,
-      e.remarks || "-",
-      formatMoneyPDF(e.amount),
-    ]);
+    // ---> NEW: Clean up the remarks for the PDF <---
+    const expRows = (report.pdfPayload.expenses || []).map((e: any) => {
+      let cleanRemarks = e.remarks ? e.remarks.replace(/[₱±]/g, "PHP ") : "-";
+      cleanRemarks = cleanRemarks.replace(
+        /\.\s*(Total (Loaded|Added):)/gi,
+        ".\n$1",
+      );
+
+      return [
+        format(new Date(e.date), "MMM d, yyyy"),
+        e.type,
+        cleanRemarks,
+        formatMoneyPDF(e.amount),
+      ];
+    });
 
     autoTable(doc, {
       startY: currentY + 20,
@@ -173,23 +189,28 @@ export default function ActiveBatchCard({ report }: { report: any }) {
           ? expRows
           : [["No expenses logged yet", "-", "-", "-"]],
       theme: "grid",
-      headStyles: { fillColor: [37, 99, 235] }, // Blue
-      styles: { fontSize: 8 },
+      headStyles: { fillColor: [37, 99, 235] },
+      styles: { fontSize: 8, cellPadding: 2 },
+      // 3. EXPANDED WIDTHS FOR LANDSCAPE
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 162 }, // The Remarks column gets 155mm to stretch out!
+        3: { cellWidth: 37, halign: "right" },
+      },
     });
 
     currentY = (doc as any).lastAutoTable.finalY;
 
-    // 4. ---> NEW: MORTALITY HISTORY TABLE <---
+    // 4. MORTALITY HISTORY TABLE
     currentY = checkPageBreak(currentY, 30);
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text("Mortality History Breakdown", 14, currentY + 15);
 
-    // Safely look for dailyLogs or mortality arrays from your payload
     const dailyRecords =
       report.pdfPayload.dailyLogs || report.pdfPayload.mortality || [];
 
-    // Only map days where mortality actually occurred
     const mortalityRows = dailyRecords
       .filter((m: any) => Number(m.mortality) > 0)
       .map((m: any) => [
@@ -207,9 +228,9 @@ export default function ActiveBatchCard({ report }: { report: any }) {
           ? mortalityRows
           : [["No mortality logged yet", "-", "-", "-"]],
       theme: "grid",
-      headStyles: { fillColor: [220, 38, 38] }, // Red header for mortality
-      styles: { fontSize: 8, halign: "center" },
-      columnStyles: { 0: { halign: "left" } }, // Keep date aligned left
+      headStyles: { fillColor: [220, 38, 38] },
+      styles: { fontSize: 8, halign: "center", cellPadding: 2 },
+      columnStyles: { 0: { halign: "left" } },
     });
 
     doc.save(`Interim_Report_${report.farmName}_${report.buildingName}.pdf`);

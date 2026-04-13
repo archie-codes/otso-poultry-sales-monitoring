@@ -148,6 +148,24 @@ export default function LogHarvestModal({ load }: { load: any }) {
     e.preventDefault();
 
     if (!harvestDate) return toast.error("Please select a harvest date.");
+
+    // ---> NEW: Prevent 0 or Empty Inputs <---
+    if (cleanQuantity <= 0) {
+      toast.error("Invalid Quantity", {
+        description: "Please enter a harvest quantity greater than zero.",
+      });
+      return;
+    }
+
+    if (cleanSellingPrice <= 0) {
+      toast.error("Missing Price", {
+        description:
+          "Please enter a valid Selling Price (₱) greater than zero.",
+        style: { backgroundColor: "red", color: "white", border: "none" },
+      });
+      return;
+    }
+
     if (isExceeding)
       return toast.error("Cannot harvest more birds than available!");
 
@@ -205,7 +223,6 @@ export default function LogHarvestModal({ load }: { load: any }) {
     if (result.error) {
       toast.error(result.error);
     } else {
-      // ---> THE FIX: Set success data but DO NOT close the modal yet! <---
       setSuccessData(result);
       if (isClosingBuilding && leftoverFeedsQty > 0) {
         toast.success("Batch Closed & Feeds Transferred!", {
@@ -215,7 +232,6 @@ export default function LogHarvestModal({ load }: { load: any }) {
     }
     setLoading(false);
   }
-
   // ---> THE FIX: Explicit close and refresh function <---
   function handleCloseAndRefresh() {
     setIsOpen(false);

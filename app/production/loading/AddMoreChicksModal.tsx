@@ -22,6 +22,7 @@ import {
   CalendarIcon,
   ChevronDown,
   Wallet,
+  Bird,
 } from "lucide-react";
 import { format, startOfDay } from "date-fns";
 import { toast } from "sonner";
@@ -37,12 +38,18 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
   const [dateAdded, setDateAdded] = useState<Date | undefined>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-  const [quantityInput, setQuantityInput] = useState("");
+  // ---> SPLIT STATE VARIABLES <---
+  const [paidQuantityInput, setPaidQuantityInput] = useState("");
+  const [allowanceQuantityInput, setAllowanceQuantityInput] = useState("");
   const [pricePerChickInput, setPricePerChickInput] = useState("");
 
-  const cleanQuantity = Number(quantityInput.replace(/,/g, "")) || 0;
+  const cleanPaidQuantity = Number(paidQuantityInput.replace(/,/g, "")) || 0;
+  const cleanAllowanceQuantity =
+    Number(allowanceQuantityInput.replace(/,/g, "")) || 0;
   const cleanPricePerChick = Number(pricePerChickInput.replace(/,/g, "")) || 0;
-  const computedAddedCapital = cleanQuantity * cleanPricePerChick;
+
+  const totalAddedQty = cleanPaidQuantity + cleanAllowanceQuantity;
+  const computedAddedCapital = cleanPaidQuantity * cleanPricePerChick;
 
   // Ensure we can't top-up before the batch existed!
   const minValidDate = load.loadDate
@@ -52,8 +59,8 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (!dateAdded || cleanQuantity <= 0 || cleanPricePerChick <= 0) {
-      toast.error("Please fill in valid numbers and a date.");
+    if (!dateAdded || cleanPaidQuantity <= 0 || cleanPricePerChick <= 0) {
+      toast.error("Please fill in valid Paid Quantity, Price, and Date.");
       return;
     }
 
@@ -68,9 +75,9 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
     setLoading(true);
     const formData = new FormData();
     formData.set("loadId", String(load.id));
-    formData.set("addedQuantity", String(cleanQuantity));
+    formData.set("paidQuantity", String(cleanPaidQuantity));
+    formData.set("allowanceQuantity", String(cleanAllowanceQuantity));
     formData.set("newPricePerChick", String(cleanPricePerChick));
-    formData.set("addedCapital", String(computedAddedCapital));
     formData.set("dateAdded", format(dateAdded, "yyyy-MM-dd"));
 
     const result = await addMoreChicksToLoad(formData);
@@ -82,7 +89,8 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
         description: "Inventory and Capital have been updated.",
       });
       setIsOpen(false);
-      setQuantityInput("");
+      setPaidQuantityInput("");
+      setAllowanceQuantityInput("");
       setPricePerChickInput("");
       router.refresh();
     }
@@ -100,7 +108,7 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-border/50 shadow-2xl">
+      <DialogContent className="sm:max-w-xl rounded-[2.5rem] p-0 overflow-hidden border-border/50 shadow-2xl">
         <div className="bg-blue-600 p-6 text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black flex items-center gap-2">
@@ -113,7 +121,7 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 bg-card">
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 max-w-sm">
             <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
               Delivery Date *
             </label>
@@ -135,20 +143,18 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
                   mode="single"
                   selected={dateAdded}
                   defaultMonth={dateAdded || new Date()}
-                  // ---> SHADCN DROPDOWN UPGRADE <---
                   captionLayout="dropdown"
                   fromYear={minValidDate ? minValidDate.getFullYear() : 2020}
                   toYear={new Date().getFullYear()}
                   onSelect={(date) => {
                     setDateAdded(date);
-                    setIsCalendarOpen(false); // Auto close
+                    setIsCalendarOpen(false);
                   }}
                   disabled={(date) => {
                     const today = new Date();
                     today.setHours(23, 59, 59, 999);
                     if (date > today) return true; // Block future
 
-                    // Block before initial load
                     if (minValidDate) {
                       const checkDate = new Date(date);
                       checkDate.setHours(0, 0, 0, 0);
@@ -168,22 +174,40 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div
               className="space-y-1.5"
               onKeyUp={(e) => {
                 const target = e.target as HTMLInputElement;
-                if (target.value !== undefined) setQuantityInput(target.value);
+                if (target.value !== undefined)
+                  setPaidQuantityInput(target.value);
               }}
             >
               <label className="text-[10px] font-bold uppercase tracking-widest text-blue-600">
-                Quantity Added *
+                Paid Qty *
               </label>
               <FormattedNumberInput
-                name="displayQty"
+                name="displayPaidQty"
                 required
                 placeholder="e.g. 5,000"
                 className="h-11 rounded-xl bg-blue-50/50 border-blue-200 font-black text-lg"
+              />
+            </div>
+            <div
+              className="space-y-1.5"
+              onKeyUp={(e) => {
+                const target = e.target as HTMLInputElement;
+                if (target.value !== undefined)
+                  setAllowanceQuantityInput(target.value);
+              }}
+            >
+              <label className="text-[10px] font-bold uppercase tracking-widest text-amber-600">
+                Allowance (Free)
+              </label>
+              <FormattedNumberInput
+                name="displayAllowanceQty"
+                placeholder="e.g. 150"
+                className="h-11 rounded-xl bg-amber-50/50 border-amber-200 font-black text-lg"
               />
             </div>
             <div
@@ -195,13 +219,13 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
               }}
             >
               <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">
-                New Price/Chick (₱) *
+                Price/Chick (₱) *
               </label>
               <FormattedNumberInput
                 name="displayPrice"
                 required
                 allowDecimals
-                placeholder="e.g. 70.00"
+                placeholder="e.g. 40.00"
                 className="h-11 rounded-xl bg-emerald-50/50 border-emerald-200 font-black text-lg"
               />
             </div>
@@ -210,25 +234,33 @@ export default function AddMoreChicksModal({ load }: { load: any }) {
           {/* VISUAL TOTAL CAPITAL DISPLAY */}
           <div className="bg-slate-50 dark:bg-slate-900/50 border border-border/50 p-4 rounded-xl flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600">
-                <Wallet className="w-4 h-4" />
+              <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600 flex flex-col items-center">
+                <Wallet className="w-5 h-5 mb-1" />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
                   Additional Cost
                 </p>
                 <p className="text-xs font-bold text-muted-foreground mt-0.5">
-                  {cleanQuantity > 0 && cleanPricePerChick > 0
-                    ? `${cleanQuantity.toLocaleString()} birds × ₱${cleanPricePerChick.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                  {cleanPaidQuantity > 0 && cleanPricePerChick > 0
+                    ? `${cleanPaidQuantity.toLocaleString()} birds × ₱${cleanPricePerChick.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                     : "Enter details"}
                 </p>
               </div>
             </div>
-            <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">
-              ₱
-              {computedAddedCapital.toLocaleString("en-US", {
-                minimumFractionDigits: 2,
-              })}
+
+            <div className="flex flex-col items-end text-right">
+              <div className="text-xl font-black text-emerald-600 dark:text-emerald-400">
+                ₱
+                {computedAddedCapital.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                <Bird className="w-3 h-3" /> Added Flock:{" "}
+                {totalAddedQty.toLocaleString()}
+              </div>
             </div>
           </div>
 

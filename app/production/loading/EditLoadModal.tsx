@@ -118,7 +118,7 @@ export default function EditLoadModal({
     formData.set("id", load.id);
     formData.set("chickType", chickType);
 
-    // Force uppercase before saving, matching AddLoadModal behavior
+    // Force uppercase before saving
     const batchName = formData.get("name") as string;
     if (batchName) formData.set("name", batchName.toUpperCase().trim());
 
@@ -126,8 +126,14 @@ export default function EditLoadModal({
     if (customerName)
       formData.set("customerName", customerName.toUpperCase().trim());
 
-    const rawQuantity = formData.get("quantity") as string;
-    if (rawQuantity) formData.set("quantity", rawQuantity.replace(/,/g, ""));
+    // Clean number inputs
+    const rawPaidQuantity = formData.get("paidQuantity") as string;
+    if (rawPaidQuantity)
+      formData.set("paidQuantity", rawPaidQuantity.replace(/,/g, ""));
+
+    const rawAllowanceQuantity = formData.get("allowanceQuantity") as string;
+    if (rawAllowanceQuantity)
+      formData.set("allowanceQuantity", rawAllowanceQuantity.replace(/,/g, ""));
 
     const rawSellingPrice = formData.get("sellingPrice") as string;
     if (rawSellingPrice)
@@ -162,7 +168,7 @@ export default function EditLoadModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[700px] p-6 sm:p-8 rounded-3xl overflow-visible border-border/50 shadow-2xl">
+      <DialogContent className="sm:max-w-[750px] p-6 sm:p-8 rounded-3xl overflow-visible border-border/50 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-2xl font-black tracking-tight text-blue-600 dark:text-blue-400">
             Edit Load Details
@@ -198,15 +204,14 @@ export default function EditLoadModal({
                     mode="single"
                     selected={loadDate}
                     defaultMonth={loadDate || new Date()}
-                    // ---> SHADCN DROPDOWN UPGRADE <---
                     captionLayout="dropdown"
                     fromYear={2020}
                     toYear={new Date().getFullYear()}
                     onSelect={(date) => {
                       setLoadDate(date);
-                      setOpenLoadDate(false); // Auto close
+                      setOpenLoadDate(false);
                     }}
-                    disabled={(date) => date > new Date()} // Block Future Dates
+                    disabled={(date) => date > new Date()}
                     initialFocus
                   />
                 </PopoverContent>
@@ -243,13 +248,12 @@ export default function EditLoadModal({
                     mode="single"
                     selected={harvestDate}
                     defaultMonth={harvestDate || new Date()}
-                    // ---> SHADCN DROPDOWN UPGRADE <---
                     captionLayout="dropdown"
                     fromYear={2020}
-                    toYear={new Date().getFullYear() + 5} // Allow future planning
+                    toYear={new Date().getFullYear() + 5}
                     onSelect={(date) => {
                       setHarvestDate(date);
-                      setOpenHarvestDate(false); // Auto close
+                      setOpenHarvestDate(false);
                     }}
                     initialFocus
                   />
@@ -258,7 +262,7 @@ export default function EditLoadModal({
             </div>
           </div>
 
-          {/* 2. BATCH / BREED / CUSTOMER GRID (3 Columns) */}
+          {/* 2. BATCH / BREED / CUSTOMER GRID */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div className="space-y-2.5">
               <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -309,7 +313,7 @@ export default function EditLoadModal({
                                   (b) => b.toLowerCase() === v.toLowerCase(),
                                 ) || v;
                               setChickType(selectedBreed);
-                              setOpenChickType(false); // Auto close
+                              setOpenChickType(false);
                             }}
                             className="py-2.5"
                           >
@@ -345,43 +349,58 @@ export default function EditLoadModal({
             </div>
           </div>
 
-          {/* 3. NUMBER GRID */}
-          <div className="grid md:grid-cols-3 gap-4 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
+          {/* 3. NUMBER GRID (Now 4 Columns to fit Paid/Allowance) */}
+          <div className="grid md:grid-cols-4 gap-4 p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-border/50">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-blue-600 dark:text-blue-400">
-                Quantity *
+              <label className="text-[10px] font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400">
+                Paid Qty *
               </label>
               <FormattedNumberInput
-                name="quantity"
+                name="paidQuantity"
                 required
-                defaultValue={load.quantity || load.actualQuantityLoad}
+                // Safely fallback to actualQuantityLoad for older records
+                defaultValue={
+                  load.paidQuantity ?? load.actualQuantityLoad ?? ""
+                }
                 placeholder="10,000"
-                className="h-11 rounded-xl bg-background font-bold text-lg"
+                className="h-11 rounded-xl bg-background font-bold text-lg border-blue-200 focus-visible:ring-blue-500"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
-                Target Selling (₱)
+              <label className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500">
+                Allowance (Free)
               </label>
               <FormattedNumberInput
-                name="sellingPrice"
-                allowDecimals={true}
-                defaultValue={load.sellingPrice?.toString() || ""}
-                placeholder="210.00"
-                className="h-11 rounded-xl bg-background font-bold"
+                name="allowanceQuantity"
+                defaultValue={load.allowanceQuantity ?? "0"}
+                placeholder="600"
+                className="h-11 rounded-xl bg-background font-bold text-lg border-amber-200 focus-visible:ring-amber-500"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-500">
-                Capital per Load (₱)
+              <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-500">
+                Total Capital (₱)
               </label>
               <FormattedNumberInput
                 name="initialCapital"
                 allowDecimals={true}
                 defaultValue={load.initialCapital}
                 placeholder="1,500,000.00"
+                className="h-11 rounded-xl bg-background font-bold border-emerald-200 focus-visible:ring-emerald-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Target Selling
+              </label>
+              <FormattedNumberInput
+                name="sellingPrice"
+                allowDecimals={true}
+                defaultValue={load.sellingPrice?.toString() || ""}
+                placeholder="210.00"
                 className="h-11 rounded-xl bg-background font-bold"
               />
             </div>

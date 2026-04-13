@@ -203,11 +203,13 @@ export default function ExpensesTableClient({
         target = `${r.farmName} (Shared Cost)`;
       }
 
-      let cleanRemarks = r.remarks
-        ? r.remarks.replace(/±/g, "PHP ").replace(/\+=/g, "PHP ")
-        : "-";
+      let cleanRemarks = r.remarks ? r.remarks.replace(/[₱±]/g, "PHP ") : "-";
 
-      cleanRemarks = cleanRemarks.replace(/(Initial Load:)\s*/i, "$1\n");
+      // 2. Force a new line right before "Total Loaded:" or "Total Added:"
+      cleanRemarks = cleanRemarks.replace(
+        /\.\s*(Total (Loaded|Added):)/gi,
+        ".\n$1",
+      );
 
       tableRows.push([
         format(new Date(r.date), "MMM d, yyyy"),
@@ -726,10 +728,10 @@ export default function ExpensesTableClient({
                   </td>
                   <td className="px-6 py-4 text-[11px] font-bold text-slate-600 dark:text-slate-400 whitespace-pre-wrap min-w-[200px]">
                     {record.remarks
-                      ? record.remarks
-                          .replace(/±/g, "₱")
-                          .replace(/\+=/g, "₱")
-                          .replace(/(Initial Load:)\s*/i, "$1\n")
+                      ? record.remarks.replace(
+                          /\.\s*(Total (Loaded|Added):)/gi,
+                          ".\n$1",
+                        )
                       : "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap font-black text-red-600 dark:text-red-400 text-right text-base">

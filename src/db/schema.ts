@@ -62,6 +62,37 @@ export const buildings = pgTable("buildings", {
   name: text("name").notNull(), // e.g., "Building A"
 });
 
+// // --------------------------------------------------------
+// // 3. LOADS (The Owner's Setup per Building)
+// // --------------------------------------------------------
+// export const loads = pgTable("loads", {
+//   id: serial("id").primaryKey(),
+
+//   // FIXED: Loads must go into a specific Building, not just a general Farm
+//   buildingId: integer("building_id")
+//     .references(() => buildings.id)
+//     .notNull(),
+
+//   name: text("name"),
+
+//   customerName: text("customer_name"),
+//   chickType: text("chick_type"),
+//   loadDate: date("load_date").notNull(),
+//   harvestDate: date("harvest_date"),
+//   actualQuantityLoad: integer("actual_quantity_load").notNull(),
+//   actualCostPerChick: numeric("actual_cost_per_chick", {
+//     precision: 10,
+//     scale: 2,
+//   }).notNull(),
+//   sellingPrice: numeric("selling_price", { precision: 10, scale: 2 }).notNull(),
+//   initialCapital: numeric("initial_capital", { precision: 12, scale: 2 })
+//     .notNull()
+//     .default("0"),
+
+//   isActive: boolean("is_active").default(true).notNull(),
+//   createdAt: timestamp("created_at").defaultNow().notNull(),
+// });
+
 // --------------------------------------------------------
 // 3. LOADS (The Owner's Setup per Building)
 // --------------------------------------------------------
@@ -79,7 +110,16 @@ export const loads = pgTable("loads", {
   chickType: text("chick_type"),
   loadDate: date("load_date").notNull(),
   harvestDate: date("harvest_date"),
+
+  // ==========================================
+  // ---> NEW: SEPARATE PAID VS ALLOWANCE <---
+  // ==========================================
+  paidQuantity: integer("paid_quantity").notNull().default(0),
+  allowanceQuantity: integer("allowance_quantity").notNull().default(0),
+
+  // This remains the TOTAL (Paid + Allowance) for mortality & harvest tracking
   actualQuantityLoad: integer("actual_quantity_load").notNull(),
+
   actualCostPerChick: numeric("actual_cost_per_chick", {
     precision: 10,
     scale: 2,

@@ -81,7 +81,14 @@ export default async function LoadingPage() {
       loadDate: loads.loadDate,
       harvestDate: loads.harvestDate,
       quantity: loads.actualQuantityLoad,
+
+      // ---> NEW: Add the split quantities so the Edit Modal can see them <---
+      paidQuantity: loads.paidQuantity,
+      allowanceQuantity: loads.allowanceQuantity,
+      actualQuantityLoad: loads.actualQuantityLoad,
+
       customer: loads.customerName,
+      customerName: loads.customerName, // Duplicate alias just in case your frontend expects it
       initialCapital: loads.initialCapital,
       chickType: loads.chickType,
       buildingName: buildings.name,

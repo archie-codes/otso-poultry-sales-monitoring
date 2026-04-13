@@ -177,9 +177,19 @@ export default function LoadCard({ load }: { load: any }) {
             <span className="text-[9px] xl:text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 text-center">
               Start Qty
             </span>
-            <span className="text-lg sm:text-xl font-black text-foreground whitespace-nowrap">
+            <span className="text-lg sm:text-xl font-black text-foreground whitespace-nowrap leading-none">
               {load.quantity?.toLocaleString() || 0}
             </span>
+            {/* ---> NEW: Show Paid vs Free Breakdown <--- */}
+            {Number(load.allowanceQuantity) > 0 && (
+              <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 dark:text-slate-500 mt-1.5 uppercase tracking-wider text-center">
+                {load.paidQuantity?.toLocaleString()}{" "}
+                <span className="text-blue-500">Paid</span>
+                <br />
+                {load.allowanceQuantity?.toLocaleString()}{" "}
+                <span className="text-amber-500">Allowance</span>
+              </span>
+            )}
           </div>
           <div className="flex flex-col items-center justify-center flex-1 px-1 sm:px-2">
             <span className="text-[9px] xl:text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-1 text-center">
@@ -212,7 +222,7 @@ export default function LoadCard({ load }: { load: any }) {
               Total Capital
             </p>
             {hasCapital ? (
-              <p className="text-base sm:text-[16px] font-black text-foreground truncate">
+              <p className="text-base sm:text-[15px] font-black text-foreground truncate">
                 {formatMoney(Number(load.initialCapital))}
               </p>
             ) : (
@@ -226,7 +236,7 @@ export default function LoadCard({ load }: { load: any }) {
           <div className="absolute right-2 top-1/2 -translate-y-1/2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors outline-none">
+                <button className="p-2 text-slate-400 hover:text-slate-600  dark:hover:bg-slate-800 rounded-full transition-colors outline-none">
                   <MoreVertical className="w-5 h-5" />
                 </button>
               </DropdownMenuTrigger>
