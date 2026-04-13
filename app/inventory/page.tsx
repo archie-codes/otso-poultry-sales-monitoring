@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../lib/auth";
+import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { db } from "../../src";
+import { db } from "@/src";
 import {
   feedDeliveries,
   feedAllocations,
@@ -9,7 +9,7 @@ import {
   buildings,
   farms,
   users,
-} from "../../src/db/schema";
+} from "@/src/db/schema";
 import { desc, eq } from "drizzle-orm";
 
 import InventoryTableClient from "./InventoryTableClient";
@@ -42,17 +42,21 @@ export default async function InventoryPage() {
       allocatedQuantity: feedAllocations.allocatedQuantity,
       farmName: farms.name,
       buildingName: buildings.name,
+      batchName: loads.name,
       loadId: loads.id,
       staffName: users.name,
-      // ---> NEW: Fetch the columns that tell us if it's an internal transfer <---
       isInternalTransfer: feedAllocations.isInternalTransfer,
       sourceBuilding: feedAllocations.sourceBuilding,
+      // ---> NEW: Fetch the original Unit Price from the Delivery table! <---
+      unitPrice: feedDeliveries.unitPrice,
     })
     .from(feedAllocations)
     .innerJoin(loads, eq(feedAllocations.loadId, loads.id))
     .innerJoin(buildings, eq(loads.buildingId, buildings.id))
     .innerJoin(farms, eq(buildings.farmId, farms.id))
     .leftJoin(users, eq(feedAllocations.recordedBy, users.id))
+    // ---> NEW: Join the delivery table to access the price <---
+    .leftJoin(feedDeliveries, eq(feedAllocations.deliveryId, feedDeliveries.id))
     .orderBy(desc(feedAllocations.allocatedDate), desc(feedAllocations.id));
 
   const historicalSuppliers = Array.from(

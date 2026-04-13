@@ -21,7 +21,6 @@ import {
   Check,
   CalendarIcon,
   ChevronDown,
-  Download,
   XCircle,
   ListFilter,
   Edit,
@@ -112,7 +111,6 @@ export default function InventoryTableClient({
   const [deletingDelivery, setDeletingDelivery] = useState<any | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // ---> NEW: State for Edit Popover Calendar <---
   const [editDate, setEditDate] = useState<Date | undefined>(undefined);
   const [openEditDate, setOpenEditDate] = useState(false);
 
@@ -215,12 +213,22 @@ export default function InventoryTableClient({
     0,
   );
   const grandTotalReceipt = grandTotalCashBond + grandTotalPayment;
+
   const grandTotalTransferred = filteredTransfers.reduce(
     (sum, r) => sum + Number(r.allocatedQuantity),
     0,
   );
+  const grandTotalTransferValue = filteredTransfers.reduce(
+    (sum, r) => sum + Number(r.allocatedQuantity) * Number(r.unitPrice || 0),
+    0,
+  );
+
   const grandTotalInternal = filteredInternal.reduce(
     (sum, r) => sum + Number(r.allocatedQuantity),
+    0,
+  );
+  const grandTotalInternalValue = filteredInternal.reduce(
+    (sum, r) => sum + Number(r.allocatedQuantity) * Number(r.unitPrice || 0),
     0,
   );
 
@@ -256,47 +264,8 @@ export default function InventoryTableClient({
     setIsProcessing(false);
   };
 
-  const downloadCSV = (type: "deliveries" | "transfers" | "internal") => {
-    let csv = "";
-    if (type === "deliveries") {
-      csv =
-        "Date,Supplier,Feed Type,Initial Qty,Remaining Qty,Unit Price,Cash Bond,Total Bond,Total Payment,Actual Receipt\n";
-      filteredDeliveries.forEach((r) => {
-        const qty = Number(r.quantity);
-        const rem = Number(r.remainingQuantity);
-        const bond = qty * Number(r.cashBond);
-        const payment = qty * Number(r.unitPrice);
-        const total = bond + payment;
-        csv += `"${format(new Date(r.deliveryDate), "MM/dd/yyyy")}","${r.supplierName}","${r.feedType}",${qty},${rem},${r.unitPrice},${r.cashBond},${bond},${payment},${total}\n`;
-      });
-    } else if (type === "transfers") {
-      csv =
-        "Date Moved,Feed Type,Qty Dispatched (Sacks),Farm,Building,Handled By\n";
-      filteredTransfers.forEach((t) => {
-        csv += `"${format(new Date(t.allocatedDate), "MM/dd/yyyy")}","${t.feedType}",${Number(t.allocatedQuantity)},"${t.farmName}","${t.buildingName}","${t.staffName || "System Admin"}"\n`;
-      });
-    } else {
-      csv =
-        "Date Moved,Feed Type,Qty Moved (Sacks),Farm,From Building,To Building,Handled By\n";
-      filteredInternal.forEach((t) => {
-        csv += `"${format(new Date(t.allocatedDate), "MM/dd/yyyy")}","${t.feedType}",${Number(t.allocatedQuantity)},"${t.farmName}","${t.sourceBuilding || "Unknown"}","${t.buildingName}","${t.staffName || "System Admin"}"\n`;
-      });
-    }
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `Otso_${type}_Report_${format(new Date(), "yyyy-MM-dd")}.csv`,
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const generatePDF = (type: "deliveries" | "transfers" | "internal") => {
-    const doc = new jsPDF(type === "deliveries" ? "landscape" : "portrait");
+    const doc = new jsPDF("landscape");
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
     doc.text("Otso Poultry Farm", 14, 20);
@@ -379,7 +348,9 @@ export default function InventoryTableClient({
       const tableColumn = [
         "Date Moved",
         "Feed Type",
-        "Qty Dispatched",
+        "Qty",
+        "Unit Px",
+        "Total Value",
         "Destination",
         "Handled By",
       ];
@@ -389,7 +360,11 @@ export default function InventoryTableClient({
           format(new Date(t.allocatedDate), "MMM d, yyyy"),
           t.feedType,
           formatSacks(t.allocatedQuantity),
-          `${t.farmName} - ${t.buildingName}`,
+          formatMoneyPDF(t.unitPrice || 0),
+          formatMoneyPDF(
+            Number(t.allocatedQuantity) * Number(t.unitPrice || 0),
+          ),
+          `${t.farmName} * ${t.buildingName} * ${t.batchName || "Unnamed"}`,
           t.staffName || "System",
         ]);
       });
@@ -399,9 +374,11 @@ export default function InventoryTableClient({
         body: tableRows,
         foot: [
           [
-            "TOTAL SACKS DISPATCHED",
+            "GRAND TOTAL",
             "",
             formatSacks(grandTotalTransferred),
+            "",
+            formatMoneyPDF(grandTotalTransferValue),
             "",
             "",
           ],
@@ -413,27 +390,36 @@ export default function InventoryTableClient({
           textColor: [15, 23, 42],
           fontStyle: "bold",
         },
-        styles: { fontSize: 9 },
+        styles: { fontSize: 8 },
       });
     } else {
       const tableColumn = [
         "Date Moved",
         "Feed Type",
-        "Qty Moved",
-        "Farm",
+        "Qty",
+        "Unit Px",
+        "Total Value",
         "From Building",
         "To Building",
         "Handled By",
       ];
       const tableRows: any[] = [];
       filteredInternal.forEach((t) => {
+        // Formats old legacy "- " strings into " * " strings for clean PDF printing
+        const cleanSourceStr = t.sourceBuilding
+          ? t.sourceBuilding.replace(/\s*-\s*/g, " * ")
+          : "Unknown";
+
         tableRows.push([
           format(new Date(t.allocatedDate), "MMM d, yyyy"),
           t.feedType,
           formatSacks(t.allocatedQuantity),
-          t.farmName,
-          t.sourceBuilding || "Unknown",
-          t.buildingName,
+          formatMoneyPDF(t.unitPrice || 0),
+          formatMoneyPDF(
+            Number(t.allocatedQuantity) * Number(t.unitPrice || 0),
+          ),
+          cleanSourceStr,
+          `${t.farmName} * ${t.buildingName} * ${t.batchName || "Unnamed"}`,
           t.staffName || "System",
         ]);
       });
@@ -443,10 +429,11 @@ export default function InventoryTableClient({
         body: tableRows,
         foot: [
           [
-            "TOTAL SACKS MOVED",
+            "GRAND TOTAL",
             "",
             formatSacks(grandTotalInternal),
             "",
+            formatMoneyPDF(grandTotalInternalValue),
             "",
             "",
             "",
@@ -535,13 +522,6 @@ export default function InventoryTableClient({
                     >
                       <Printer className="w-4 h-4 text-blue-600" /> Download PDF
                     </DropdownMenuItem>
-                    {/* <DropdownMenuItem
-                      onClick={() => downloadCSV("deliveries")}
-                      className="flex items-center gap-3 p-3 font-bold text-sm cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <Download className="w-4 h-4 text-emerald-600" /> Download
-                      Excel (CSV)
-                    </DropdownMenuItem> */}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -1046,18 +1026,12 @@ export default function InventoryTableClient({
                     >
                       <Printer className="w-4 h-4 text-blue-600" /> Download PDF
                     </DropdownMenuItem>
-                    {/* <DropdownMenuItem
-                      onClick={() => downloadCSV("transfers")}
-                      className="flex items-center gap-3 p-3 font-bold text-sm cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <Download className="w-4 h-4 text-emerald-600" /> Download
-                      Excel (CSV)
-                    </DropdownMenuItem> */}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
             </div>
 
+            {/* ---> TAB 2 SUMMARY CARDS <--- */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-amber-50/50 border border-amber-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                 <div>
@@ -1070,6 +1044,19 @@ export default function InventoryTableClient({
                 </div>
                 <div className="p-4 bg-amber-100 text-amber-600 rounded-2xl">
                   <Wheat className="w-6 h-6" />
+                </div>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-900 border border-border/50 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">
+                    Total Value of Dispatch
+                  </p>
+                  <h4 className="text-3xl font-black text-foreground">
+                    {formatMoney(grandTotalTransferValue)}
+                  </h4>
+                </div>
+                <div className="p-4 bg-white dark:bg-slate-800 text-foreground rounded-2xl border border-border/50 shadow-sm">
+                  <Coins className="w-6 h-6" />
                 </div>
               </div>
             </div>
@@ -1101,6 +1088,13 @@ export default function InventoryTableClient({
                       <th className="px-6 py-4 text-[10px] font-black uppercase text-amber-600 text-center">
                         Qty Dispatched
                       </th>
+                      {/* ---> TAB 2 PRICING COLUMNS <--- */}
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground text-right">
+                        Unit Price
+                      </th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-foreground text-right">
+                        Total Value
+                      </th>
                       <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground">
                         Destination
                       </th>
@@ -1113,7 +1107,7 @@ export default function InventoryTableClient({
                     {paginatedTransfers.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={7}
                           className="px-6 py-12 text-center text-muted-foreground font-black uppercase tracking-widest opacity-40"
                         >
                           No dispatch records found.
@@ -1136,15 +1130,24 @@ export default function InventoryTableClient({
                           <td className="px-6 py-4 font-black text-amber-600 text-center text-lg bg-amber-50/30">
                             {formatSacks(t.allocatedQuantity)}
                           </td>
+                          {/* ---> TAB 2 PRICING CELLS <--- */}
+                          <td className="px-6 py-4 font-bold text-muted-foreground text-right">
+                            {formatMoney(t.unitPrice || 0)}
+                          </td>
+                          <td className="px-6 py-4 font-black text-foreground text-right">
+                            {formatMoney(
+                              Number(t.allocatedQuantity) *
+                                Number(t.unitPrice || 0),
+                            )}
+                          </td>
                           <td className="px-6 py-4">
-                            <div className="flex flex-col space-y-0.5 text-left">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                                {t.farmName}
-                              </span>
-                              <span className="text-xs font-black uppercase text-foreground">
-                                {t.buildingName}
-                              </span>
-                            </div>
+                            <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 rounded-lg border border-emerald-200/50">
+                              {t.farmName}{" "}
+                              <span className="opacity-50 mx-1.5">*</span>{" "}
+                              {t.buildingName}{" "}
+                              <span className="opacity-50 mx-1.5">*</span>{" "}
+                              {t.batchName || "Unnamed"}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase">
                             {t.staffName || "System Admin"}
@@ -1288,18 +1291,12 @@ export default function InventoryTableClient({
                     >
                       <Printer className="w-4 h-4 text-blue-600" /> Download PDF
                     </DropdownMenuItem>
-                    {/* <DropdownMenuItem
-                      onClick={() => downloadCSV("internal")}
-                      className="flex items-center gap-3 p-3 font-bold text-sm cursor-pointer rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <Download className="w-4 h-4 text-emerald-600" /> Download
-                      Excel (CSV)
-                    </DropdownMenuItem> */}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
             </div>
 
+            {/* ---> TAB 3 SUMMARY CARDS <--- */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-indigo-50/50 border border-indigo-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                 <div>
@@ -1312,6 +1309,19 @@ export default function InventoryTableClient({
                 </div>
                 <div className="p-4 bg-indigo-100 text-indigo-600 rounded-2xl">
                   <ArrowRightLeft className="w-6 h-6" />
+                </div>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-900 border border-border/50 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">
+                    Total Value Moved
+                  </p>
+                  <h4 className="text-3xl font-black text-foreground">
+                    {formatMoney(grandTotalInternalValue)}
+                  </h4>
+                </div>
+                <div className="p-4 bg-white dark:bg-slate-800 text-foreground rounded-2xl border border-border/50 shadow-sm">
+                  <Coins className="w-6 h-6" />
                 </div>
               </div>
             </div>
@@ -1343,6 +1353,13 @@ export default function InventoryTableClient({
                       <th className="px-6 py-4 text-[10px] font-black uppercase text-indigo-600 text-center">
                         Qty Moved
                       </th>
+                      {/* ---> TAB 3 PRICING COLUMNS <--- */}
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground text-right">
+                        Unit Price
+                      </th>
+                      <th className="px-6 py-4 text-[10px] font-black uppercase text-foreground text-right">
+                        Total Value
+                      </th>
                       <th className="px-6 py-4 text-[10px] font-black uppercase text-rose-600">
                         From Building
                       </th>
@@ -1358,44 +1375,82 @@ export default function InventoryTableClient({
                     {paginatedInternal.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={8}
                           className="px-6 py-12 text-center text-muted-foreground font-black uppercase tracking-widest opacity-40"
                         >
                           No internal transfers found.
                         </td>
                       </tr>
                     ) : (
-                      paginatedInternal.map((t) => (
-                        <tr
-                          key={t.id}
-                          className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30"
-                        >
-                          <td className="px-6 py-4 font-bold">
-                            {format(new Date(t.allocatedDate), "MMM d, yyyy")}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black border uppercase tracking-wider bg-slate-100 text-slate-700">
-                              {t.feedType}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 font-black text-indigo-600 text-center text-lg bg-indigo-50/30 dark:bg-indigo-900/10">
-                            {formatSacks(t.allocatedQuantity)}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-xs font-black uppercase text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 px-2 py-1 rounded">
-                              {t.sourceBuilding || "Unknown"}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-xs font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded">
-                              {t.buildingName}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase">
-                            {t.staffName || "System Admin"}
-                          </td>
-                        </tr>
-                      ))
+                      paginatedInternal.map((t) => {
+                        // ---> THE FIX: Clean up old strings that used dashes to match the new asterisks <---
+                        const sourceStr = t.sourceBuilding
+                          ? t.sourceBuilding.replace(/\s*-\s*/g, " * ")
+                          : "Unknown";
+
+                        return (
+                          <tr
+                            key={t.id}
+                            className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30"
+                          >
+                            <td className="px-6 py-4 font-bold">
+                              {format(new Date(t.allocatedDate), "MMM d, yyyy")}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black border uppercase tracking-wider bg-slate-100 text-slate-700">
+                                {t.feedType}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 font-black text-indigo-600 text-center text-lg bg-indigo-50/30 dark:bg-indigo-900/10">
+                              {formatSacks(t.allocatedQuantity)}
+                            </td>
+                            {/* ---> TAB 3 PRICING CELLS <--- */}
+                            <td className="px-6 py-4 font-bold text-muted-foreground text-right">
+                              {formatMoney(t.unitPrice || 0)}
+                            </td>
+                            <td className="px-6 py-4 font-black text-foreground text-right">
+                              {formatMoney(
+                                Number(t.allocatedQuantity) *
+                                  Number(t.unitPrice || 0),
+                              )}
+                            </td>
+
+                            {/* ---> THE FIX: FORMATTED SOURCE (FROM) WITH STYLED ASTERISKS <--- */}
+                            <td className="px-6 py-4">
+                              <span className="text-[10px] font-black uppercase text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 rounded-lg border border-rose-200/50">
+                                {sourceStr
+                                  .split("*")
+                                  .map(
+                                    (part: string, i: number, arr: any[]) => (
+                                      <span key={i}>
+                                        {part.trim()}
+                                        {i < arr.length - 1 && (
+                                          <span className="opacity-50 mx-1.5">
+                                            *
+                                          </span>
+                                        )}
+                                      </span>
+                                    ),
+                                  )}
+                              </span>
+                            </td>
+
+                            {/* ---> THE FIX: FORMATTED DESTINATION (TO) WITH STYLED ASTERISKS <--- */}
+                            <td className="px-6 py-4">
+                              <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 rounded-lg border border-emerald-200/50">
+                                {t.farmName}{" "}
+                                <span className="opacity-50 mx-1.5">*</span>{" "}
+                                {t.buildingName}{" "}
+                                <span className="opacity-50 mx-1.5">*</span>{" "}
+                                {t.batchName || "Unnamed"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-[10px] font-black text-muted-foreground uppercase">
+                              {t.staffName || "System Admin"}
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
