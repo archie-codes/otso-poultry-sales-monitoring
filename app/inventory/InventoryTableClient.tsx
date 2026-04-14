@@ -214,21 +214,29 @@ export default function InventoryTableClient({
   );
   const grandTotalReceipt = grandTotalCashBond + grandTotalPayment;
 
+  // ---> THE FIX: Math for Transfers including Cash Bond <---
   const grandTotalTransferred = filteredTransfers.reduce(
     (sum, r) => sum + Number(r.allocatedQuantity),
     0,
   );
   const grandTotalTransferValue = filteredTransfers.reduce(
-    (sum, r) => sum + Number(r.allocatedQuantity) * Number(r.unitPrice || 0),
+    (sum, r) =>
+      sum +
+      Number(r.allocatedQuantity) *
+        (Number(r.unitPrice || 0) + Number(r.cashBond || 0)),
     0,
   );
 
+  // ---> THE FIX: Math for Internal logs including Cash Bond <---
   const grandTotalInternal = filteredInternal.reduce(
     (sum, r) => sum + Number(r.allocatedQuantity),
     0,
   );
   const grandTotalInternalValue = filteredInternal.reduce(
-    (sum, r) => sum + Number(r.allocatedQuantity) * Number(r.unitPrice || 0),
+    (sum, r) =>
+      sum +
+      Number(r.allocatedQuantity) *
+        (Number(r.unitPrice || 0) + Number(r.cashBond || 0)),
     0,
   );
 
@@ -349,21 +357,22 @@ export default function InventoryTableClient({
         "Date Moved",
         "Feed Type",
         "Qty",
-        "Unit Px",
+        "Cost/Sack",
         "Total Value",
         "Destination",
         "Handled By",
       ];
       const tableRows: any[] = [];
       filteredTransfers.forEach((t) => {
+        const combinedPrice =
+          Number(t.unitPrice || 0) + Number(t.cashBond || 0);
+
         tableRows.push([
           format(new Date(t.allocatedDate), "MMM d, yyyy"),
           t.feedType,
           formatSacks(t.allocatedQuantity),
-          formatMoneyPDF(t.unitPrice || 0),
-          formatMoneyPDF(
-            Number(t.allocatedQuantity) * Number(t.unitPrice || 0),
-          ),
+          formatMoneyPDF(combinedPrice),
+          formatMoneyPDF(Number(t.allocatedQuantity) * combinedPrice),
           `${t.farmName} * ${t.buildingName} * ${t.batchName || "Unnamed"}`,
           t.staffName || "System",
         ]);
@@ -397,7 +406,7 @@ export default function InventoryTableClient({
         "Date Moved",
         "Feed Type",
         "Qty",
-        "Unit Px",
+        "Cost/Sack",
         "Total Value",
         "From Building",
         "To Building",
@@ -405,19 +414,18 @@ export default function InventoryTableClient({
       ];
       const tableRows: any[] = [];
       filteredInternal.forEach((t) => {
-        // Formats old legacy "- " strings into " * " strings for clean PDF printing
         const cleanSourceStr = t.sourceBuilding
           ? t.sourceBuilding.replace(/\s*-\s*/g, " * ")
           : "Unknown";
+        const combinedPrice =
+          Number(t.unitPrice || 0) + Number(t.cashBond || 0);
 
         tableRows.push([
           format(new Date(t.allocatedDate), "MMM d, yyyy"),
           t.feedType,
           formatSacks(t.allocatedQuantity),
-          formatMoneyPDF(t.unitPrice || 0),
-          formatMoneyPDF(
-            Number(t.allocatedQuantity) * Number(t.unitPrice || 0),
-          ),
+          formatMoneyPDF(combinedPrice),
+          formatMoneyPDF(Number(t.allocatedQuantity) * combinedPrice),
           cleanSourceStr,
           `${t.farmName} * ${t.buildingName} * ${t.batchName || "Unnamed"}`,
           t.staffName || "System",
@@ -1088,9 +1096,9 @@ export default function InventoryTableClient({
                       <th className="px-6 py-4 text-[10px] font-black uppercase text-amber-600 text-center">
                         Qty Dispatched
                       </th>
-                      {/* ---> TAB 2 PRICING COLUMNS <--- */}
+                      {/* ---> THE FIX: COMBINED PRICE DISPLAY <--- */}
                       <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground text-right">
-                        Unit Price
+                        Cost / Sack
                       </th>
                       <th className="px-6 py-4 text-[10px] font-black uppercase text-foreground text-right">
                         Total Value
@@ -1130,14 +1138,29 @@ export default function InventoryTableClient({
                           <td className="px-6 py-4 font-black text-amber-600 text-center text-lg bg-amber-50/30">
                             {formatSacks(t.allocatedQuantity)}
                           </td>
-                          {/* ---> TAB 2 PRICING CELLS <--- */}
-                          <td className="px-6 py-4 font-bold text-muted-foreground text-right">
-                            {formatMoney(t.unitPrice || 0)}
+
+                          {/* ---> THE FIX: COMBINED PRICE & SUBTOTALS <--- */}
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex flex-col items-end">
+                              <span className="font-bold text-muted-foreground">
+                                {formatMoney(
+                                  Number(t.unitPrice || 0) +
+                                    Number(t.cashBond || 0),
+                                )}
+                              </span>
+                              {Number(t.cashBond) > 0 && (
+                                <span className="text-[8px] uppercase tracking-wider text-amber-600/80">
+                                  ({formatMoney(t.unitPrice || 0)} +{" "}
+                                  {formatMoney(t.cashBond)} bond)
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 font-black text-foreground text-right">
                             {formatMoney(
                               Number(t.allocatedQuantity) *
-                                Number(t.unitPrice || 0),
+                                (Number(t.unitPrice || 0) +
+                                  Number(t.cashBond || 0)),
                             )}
                           </td>
                           <td className="px-6 py-4">
@@ -1353,9 +1376,9 @@ export default function InventoryTableClient({
                       <th className="px-6 py-4 text-[10px] font-black uppercase text-indigo-600 text-center">
                         Qty Moved
                       </th>
-                      {/* ---> TAB 3 PRICING COLUMNS <--- */}
+                      {/* ---> THE FIX: COMBINED PRICE DISPLAY <--- */}
                       <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground text-right">
-                        Unit Price
+                        Cost / Sack
                       </th>
                       <th className="px-6 py-4 text-[10px] font-black uppercase text-foreground text-right">
                         Total Value
@@ -1383,7 +1406,6 @@ export default function InventoryTableClient({
                       </tr>
                     ) : (
                       paginatedInternal.map((t) => {
-                        // ---> THE FIX: Clean up old strings that used dashes to match the new asterisks <---
                         const sourceStr = t.sourceBuilding
                           ? t.sourceBuilding.replace(/\s*-\s*/g, " * ")
                           : "Unknown";
@@ -1404,18 +1426,32 @@ export default function InventoryTableClient({
                             <td className="px-6 py-4 font-black text-indigo-600 text-center text-lg bg-indigo-50/30 dark:bg-indigo-900/10">
                               {formatSacks(t.allocatedQuantity)}
                             </td>
-                            {/* ---> TAB 3 PRICING CELLS <--- */}
-                            <td className="px-6 py-4 font-bold text-muted-foreground text-right">
-                              {formatMoney(t.unitPrice || 0)}
+
+                            {/* ---> THE FIX: COMBINED PRICE & SUBTOTALS <--- */}
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex flex-col items-end">
+                                <span className="font-bold text-muted-foreground">
+                                  {formatMoney(
+                                    Number(t.unitPrice || 0) +
+                                      Number(t.cashBond || 0),
+                                  )}
+                                </span>
+                                {Number(t.cashBond) > 0 && (
+                                  <span className="text-[8px] uppercase tracking-wider text-amber-600/80">
+                                    ({formatMoney(t.unitPrice || 0)} +{" "}
+                                    {formatMoney(t.cashBond)} bond)
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-6 py-4 font-black text-foreground text-right">
                               {formatMoney(
                                 Number(t.allocatedQuantity) *
-                                  Number(t.unitPrice || 0),
+                                  (Number(t.unitPrice || 0) +
+                                    Number(t.cashBond || 0)),
                               )}
                             </td>
 
-                            {/* ---> THE FIX: FORMATTED SOURCE (FROM) WITH STYLED ASTERISKS <--- */}
                             <td className="px-6 py-4">
                               <span className="text-[10px] font-black uppercase text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 rounded-lg border border-rose-200/50">
                                 {sourceStr
@@ -1435,7 +1471,6 @@ export default function InventoryTableClient({
                               </span>
                             </td>
 
-                            {/* ---> THE FIX: FORMATTED DESTINATION (TO) WITH STYLED ASTERISKS <--- */}
                             <td className="px-6 py-4">
                               <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 rounded-lg border border-emerald-200/50">
                                 {t.farmName}{" "}

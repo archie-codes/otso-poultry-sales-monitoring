@@ -39,7 +39,6 @@ import {
 } from "@/components/ui/popover";
 import { FormattedNumberInput } from "@/components/ui/FormattedNumberInput";
 
-// ---> NEW: FRACTION FORMATTER TO CLEAN UP "10.00" SACKS <---
 const formatSacks = (val: number | string | null | undefined) => {
   const num = Number(val);
   if (!num || num === 0) return "0";
@@ -108,10 +107,12 @@ export default function TransferFeedsModal({
     (d) => String(d.id) === selectedDeliveryId,
   );
 
+  // ---> THE FIX: Calculate Preview including the Cash Bond <---
   const unitPrice = selectedDelivery ? Number(selectedDelivery.unitPrice) : 0;
-  const totalExpensePreview = cleanQty * unitPrice;
+  const cashBond = selectedDelivery ? Number(selectedDelivery.cashBond) : 0;
+  const totalCostPerSack = unitPrice + cashBond;
+  const totalExpensePreview = cleanQty * totalCostPerSack;
 
-  // FIX: Safely cast to Number for accurate math comparison
   const isExceeding =
     selectedDelivery && cleanQty > Number(selectedDelivery.remainingQuantity);
 
@@ -127,7 +128,6 @@ export default function TransferFeedsModal({
     return activeLoads.filter((load) => load.farmName === selectedFarm);
   }, [selectedFarm, activeLoads]);
 
-  // ---> STRICT TIMEZONE LOGIC FOR DESTINATION LOAD <---
   const selectedLoadDetails = activeLoads.find(
     (l) => String(l.id) === selectedLoadId,
   );
@@ -148,7 +148,6 @@ export default function TransferFeedsModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    // Strict Validation
     if (!selectedWarehouseSupplier)
       return toast.error("Please select a Warehouse Supplier.");
     if (!selectedDeliveryId)
@@ -196,7 +195,6 @@ export default function TransferFeedsModal({
       toast.success("Feeds successfully transferred to building!");
       setIsOpen(false);
 
-      // Reset everything for the next time
       setQuantity("");
       setSelectedWarehouseSupplier("");
       setSelectedDeliveryId("");
@@ -323,7 +321,6 @@ export default function TransferFeedsModal({
                       )}
                     >
                       <span className="truncate flex items-center">
-                        {/* ---> THE FIX: Apply formatSacks to the selected preview <--- */}
                         {selectedDeliveryId && selectedDelivery
                           ? `${formatSacks(selectedDelivery.remainingQuantity)} sacks • ${selectedDelivery.feedType}`
                           : selectedWarehouseSupplier
@@ -362,7 +359,6 @@ export default function TransferFeedsModal({
                               />
                               <div className="flex flex-col">
                                 <span>
-                                  {/* ---> THE FIX: Apply formatSacks to the dropdown list <--- */}
                                   {formatSacks(d.remainingQuantity)} sacks •{" "}
                                   <span className="text-emerald-600">
                                     {d.feedType}
@@ -533,153 +529,154 @@ export default function TransferFeedsModal({
                 </Popover>
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-2">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Date of Transfer *
-              </label>
-              <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    disabled={!selectedLoadId}
+            <div className="grid grid-cols-2 gap-4 pt-2">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  Date of Transfer *
+                </label>
+                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      disabled={!selectedLoadId}
+                      className={cn(
+                        "w-full h-11 rounded-xl justify-between border-input font-normal px-3 bg-secondary/30 disabled:opacity-50",
+                        !allocatedDate && "text-muted-foreground",
+                      )}
+                    >
+                      <div className="flex items-center text-sm">
+                        <CalendarIcon className="mr-2 h-4 w-4 opacity-70 shrink-0" />
+                        <span className="truncate">
+                          {allocatedDate
+                            ? format(allocatedDate, "MMM d, yyyy")
+                            : "Pick date"}
+                        </span>
+                      </div>
+                      <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 z-200" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={allocatedDate}
+                      defaultMonth={allocatedDate || new Date()}
+                      captionLayout="dropdown"
+                      fromYear={
+                        minValidDate ? minValidDate.getFullYear() : 2020
+                      }
+                      toYear={new Date().getFullYear()}
+                      onSelect={(date) => {
+                        setAllocatedDate(date);
+                        setIsCalendarOpen(false);
+                      }}
+                      disabled={(date) => {
+                        // Block Future
+                        const today = new Date();
+                        today.setHours(23, 59, 59, 999);
+                        if (date > today) return true;
+
+                        // Block Before Flock Arrival
+                        if (minValidDate) {
+                          const checkDate = new Date(date);
+                          checkDate.setHours(0, 0, 0, 0);
+                          if (checkDate.getTime() < minValidDate.getTime())
+                            return true;
+                        }
+
+                        return false;
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                {minValidDate && (
+                  <p className="text-[9px] font-bold text-emerald-600 mt-1">
+                    Valid from {format(minValidDate, "MMM d, yyyy")}
+                  </p>
+                )}
+              </div>
+
+              <div
+                className="space-y-1.5"
+                onChange={(e) =>
+                  setQuantity((e.target as HTMLInputElement).value)
+                }
+              >
+                <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">
+                  Quantity (Sacks) *
+                </label>
+                <FormattedNumberInput
+                  name="displayQuantity"
+                  required
+                  allowDecimals={true}
+                  placeholder="0"
+                  className="h-11 rounded-xl font-black bg-emerald-50 border-emerald-200"
+                />
+              </div>
+            </div>
+
+            {/* FINANCIAL PREVIEW */}
+            {selectedDelivery && cleanQty > 0 && (
+              <div
+                className={cn(
+                  "p-4 rounded-xl border flex items-center justify-between transition-colors",
+                  isExceeding
+                    ? "bg-red-50 border-red-200"
+                    : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200",
+                )}
+              >
+                <div>
+                  <p
                     className={cn(
-                      "w-full h-11 rounded-xl justify-between border-input font-normal px-3 bg-secondary/30 disabled:opacity-50",
-                      !allocatedDate && "text-muted-foreground",
+                      "text-[10px] font-black uppercase tracking-widest",
+                      isExceeding ? "text-red-600" : "text-emerald-700",
                     )}
                   >
-                    <div className="flex items-center text-sm">
-                      <CalendarIcon className="mr-2 h-4 w-4 opacity-70 shrink-0" />
-                      <span className="truncate">
-                        {allocatedDate
-                          ? format(allocatedDate, "MMM d, yyyy")
-                          : "Pick date"}
-                      </span>
-                    </div>
-                    <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 z-200" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={allocatedDate}
-                    defaultMonth={allocatedDate || new Date()}
-                    // ---> SHADCN DROPDOWN UPGRADE <---
-                    captionLayout="dropdown"
-                    fromYear={minValidDate ? minValidDate.getFullYear() : 2020}
-                    toYear={new Date().getFullYear()}
-                    onSelect={(date) => {
-                      setAllocatedDate(date);
-                      setIsCalendarOpen(false);
-                    }}
-                    disabled={(date) => {
-                      // Block Future
-                      const today = new Date();
-                      today.setHours(23, 59, 59, 999);
-                      if (date > today) return true;
-
-                      // Block Before Flock Arrival
-                      if (minValidDate) {
-                        const checkDate = new Date(date);
-                        checkDate.setHours(0, 0, 0, 0);
-                        if (checkDate.getTime() < minValidDate.getTime())
-                          return true;
-                      }
-
-                      return false;
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-              {minValidDate && (
-                <p className="text-[9px] font-bold text-emerald-600 mt-1">
-                  Valid from {format(minValidDate, "MMM d, yyyy")}
-                </p>
-              )}
-            </div>
-
-            <div
-              className="space-y-1.5"
-              onChange={(e) =>
-                setQuantity((e.target as HTMLInputElement).value)
-              }
-            >
-              <label className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">
-                Quantity (Sacks) *
-              </label>
-              <FormattedNumberInput
-                name="displayQuantity"
-                required
-                allowDecimals={true}
-                placeholder="0"
-                className="h-11 rounded-xl font-black bg-emerald-50 border-emerald-200"
-              />
-            </div>
-          </div>
-
-          {/* FINANCIAL PREVIEW */}
-          {selectedDelivery && cleanQty > 0 && (
-            <div
-              className={cn(
-                "p-4 rounded-xl border flex items-center justify-between transition-colors",
-                isExceeding
-                  ? "bg-red-50 border-red-200"
-                  : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200",
-              )}
-            >
-              <div>
-                <p
+                    {isExceeding
+                      ? "Exceeds Stock!"
+                      : "Financial Expense to Building"}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-xs font-bold mt-0.5",
+                      isExceeding ? "text-red-500" : "text-emerald-600/80",
+                    )}
+                  >
+                    {formatSacks(cleanQty)} sacks × ₱
+                    {totalCostPerSack.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </p>
+                </div>
+                <div
                   className={cn(
-                    "text-[10px] font-black uppercase tracking-widest",
+                    "text-lg font-black",
                     isExceeding ? "text-red-600" : "text-emerald-700",
                   )}
                 >
-                  {isExceeding
-                    ? "Exceeds Stock!"
-                    : "Financial Expense to Building"}
-                </p>
-                <p
-                  className={cn(
-                    "text-xs font-bold mt-0.5",
-                    isExceeding ? "text-red-500" : "text-emerald-600/80",
-                  )}
-                >
-                  {formatSacks(cleanQty)} sacks × ₱
-                  {unitPrice.toLocaleString(undefined, {
+                  ₱
+                  {totalExpensePreview.toLocaleString("en-US", {
                     minimumFractionDigits: 2,
                   })}
-                </p>
+                </div>
               </div>
-              <div
-                className={cn(
-                  "text-lg font-black",
-                  isExceeding ? "text-red-600" : "text-emerald-700",
-                )}
-              >
-                ₱
-                {totalExpensePreview.toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                })}
-              </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t border-border/50">
             <Button
               type="button"
               variant="ghost"
               onClick={() => setIsOpen(false)}
-              className="rounded-xl font-bold h-11"
+              className="h-11 rounded-xl font-bold px-6"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={loading || isExceeding}
-              className="rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-8 h-11"
+              className="h-11 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-8"
             >
               {loading ? (
                 <>

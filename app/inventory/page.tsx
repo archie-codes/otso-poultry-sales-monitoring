@@ -49,6 +49,7 @@ export default async function InventoryPage() {
       sourceBuilding: feedAllocations.sourceBuilding,
       // ---> NEW: Fetch the original Unit Price from the Delivery table! <---
       unitPrice: feedDeliveries.unitPrice,
+      cashBond: feedDeliveries.cashBond,
     })
     .from(feedAllocations)
     .innerJoin(loads, eq(feedAllocations.loadId, loads.id))

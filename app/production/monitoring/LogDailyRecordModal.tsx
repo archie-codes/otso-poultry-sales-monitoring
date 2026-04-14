@@ -93,7 +93,6 @@ export default function LogDailyRecordModal({
 
   const selectedLoad = safeLoads.find((l) => String(l.id) === loadId);
 
-  // ---> STRICT TIMEZONE SAFE PARSER <---
   let safeLoadDateObj: Date | null = null;
   if (selectedLoad && selectedLoad.loadDate) {
     const parts = String(selectedLoad.loadDate).split("T")[0].split("-");
@@ -114,7 +113,7 @@ export default function LogDailyRecordModal({
       .map(([type, data]: [string, any]) => ({
         type,
         qty: data.qty,
-        price: data.price,
+        price: data.price, // Now accurately reflects (Unit Price + Bond)
       }));
   }, [selectedLoad]);
 
@@ -123,6 +122,8 @@ export default function LogDailyRecordModal({
       ? selectedLoad.feedStock[feedType]
       : null;
   const availableStock = selectedFeedData ? selectedFeedData.qty : 0;
+
+  // ---> THE FIX: Calculate Cost using Combined Price <---
   const feedPrice = selectedFeedData ? selectedFeedData.price : 0;
 
   const computedAmFeeds = (Number(feedsAmWhole) || 0) + feedsAmFrac;
@@ -326,7 +327,6 @@ export default function LogDailyRecordModal({
                             )}
                           >
                             <span className="truncate uppercase text-xs tracking-wider">
-                              {/* ---> THE FIX: Checking name, loadName, AND batchName <--- */}
                               {selectedLoad
                                 ? `${selectedLoad.buildingName} - ${selectedLoad.name || selectedLoad.loadName || selectedLoad.batchName || "UNNAMED"}`
                                 : "-- Select Target --"}
@@ -343,7 +343,6 @@ export default function LogDailyRecordModal({
                               </CommandEmpty>
                               <CommandGroup>
                                 {filteredLoads.map((l: any) => {
-                                  // ---> THE FIX: Checking name, loadName, AND batchName <---
                                   const batchName =
                                     l.name ||
                                     l.loadName ||
@@ -443,13 +442,13 @@ export default function LogDailyRecordModal({
                             onSelect={(d) => {
                               if (d) {
                                 setRecordDate(d);
-                                setIsCalendarOpen(false); // Auto closes!
+                                setIsCalendarOpen(false);
                               }
                             }}
                             disabled={(d) => {
                               const today = new Date();
                               today.setHours(23, 59, 59, 999);
-                              if (d > today) return true; // Block future
+                              if (d > today) return true;
                               if (safeLoadDateObj) {
                                 const checkDate = new Date(d);
                                 checkDate.setHours(0, 0, 0, 0);
@@ -457,7 +456,7 @@ export default function LogDailyRecordModal({
                                   checkDate.getTime() <
                                   safeLoadDateObj.getTime()
                                 )
-                                  return true; // Block past
+                                  return true;
                               }
                               return false;
                             }}
@@ -760,7 +759,7 @@ export default function LogDailyRecordModal({
                   </div>
 
                   {/* REMARKS */}
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 mt-6">
                     <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                       Remarks (Optional)
                     </label>

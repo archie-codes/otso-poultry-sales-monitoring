@@ -437,7 +437,7 @@ export default function EditDailyRecordModal({ record }: { record: any }) {
                       </div>
                     </div>
 
-                    {/* LIVE COST ESTIMATOR */}
+                    {/* ---> THE FIX: Removed exact cost estimator, just total quantity to prevent confusion on old records <--- */}
                     <div className="flex justify-between items-center p-4 rounded-2xl transition-colors border bg-amber-100/50 dark:bg-amber-900/20 border-amber-200/50 text-amber-700 dark:text-amber-500">
                       <div className="flex flex-col">
                         <span className="text-[10px] font-black uppercase tracking-widest">
