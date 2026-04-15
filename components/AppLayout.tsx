@@ -77,7 +77,7 @@ export default function AppLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-slate-100 dark:bg-background">
       {/* ---> NEW: Pass the state and toggle function to the Sidebar <--- */}
       <Sidebar
         role={role}
