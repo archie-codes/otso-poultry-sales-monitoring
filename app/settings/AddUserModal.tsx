@@ -331,7 +331,7 @@ export default function AddUserModal() {
       {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="h-11 px-6 inline-flex items-center justify-center rounded-xl text-sm font-bold bg-primary text-primary-foreground transition-all duration-300 shadow-sm hover:bg-primary/90 hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+        className="h-11 px-6 inline-flex items-center justify-center rounded-xl text-sm font-bold bg-blue-600 dark:bg-blue-600 dark:text-white text-primary-foreground transition-all duration-300 shadow-sm hover:bg-blue-700 hover:dark:bg-blue-700 hover:shadow-md cursor-pointer"
       >
         <ShieldPlus className="w-5 h-5 mr-2" /> Add New User
       </button>
