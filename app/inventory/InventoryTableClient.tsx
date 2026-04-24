@@ -500,7 +500,7 @@ export default function InventoryTableClient({
             <div className="flex flex-col bg-slate-50 dark:bg-slate-900/50 p-5 rounded-2xl border border-border/50 gap-4">
               <div className="flex items-start justify-between gap-4 w-full">
                 <div className="flex flex-col min-w-0 pr-4">
-                  <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-foreground truncate max-w-[200px] sm:max-w-sm md:max-w-xl lg:max-w-2xl">
+                  <h3 className="text-xl font-black uppercase tracking-tight text-foreground truncate max-w-[200px] sm:max-w-sm md:max-w-xl lg:max-w-2xl">
                     {selectedSupplier === "all"
                       ? "Master Inbound Ledger"
                       : selectedSupplier}
@@ -1046,7 +1046,7 @@ export default function InventoryTableClient({
                   <p className="text-[10px] font-black uppercase tracking-widest text-amber-600/80 mb-1">
                     Total Sacks Dispatched
                   </p>
-                  <h4 className="text-3xl font-black text-amber-700">
+                  <h4 className="text-lg font-black text-amber-700">
                     {formatSacks(grandTotalTransferred)}
                   </h4>
                 </div>
@@ -1059,7 +1059,7 @@ export default function InventoryTableClient({
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">
                     Total Value of Dispatch
                   </p>
-                  <h4 className="text-3xl font-black text-foreground">
+                  <h4 className="text-lg font-black text-foreground">
                     {formatMoney(grandTotalTransferValue)}
                   </h4>
                 </div>
@@ -1326,7 +1326,7 @@ export default function InventoryTableClient({
                   <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600/80 mb-1">
                     Total Sacks Moved Internally
                   </p>
-                  <h4 className="text-3xl font-black text-indigo-700">
+                  <h4 className="text-lg font-black text-indigo-700">
                     {formatSacks(grandTotalInternal)}
                   </h4>
                 </div>
@@ -1339,7 +1339,7 @@ export default function InventoryTableClient({
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">
                     Total Value Moved
                   </p>
-                  <h4 className="text-3xl font-black text-foreground">
+                  <h4 className="text-lg font-black text-foreground">
                     {formatMoney(grandTotalInternalValue)}
                   </h4>
                 </div>
