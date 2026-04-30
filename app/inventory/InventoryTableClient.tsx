@@ -680,41 +680,52 @@ export default function InventoryTableClient({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-amber-50/50 dark:bg-slate-950 border border-amber-200 dark:border-slate-800 p-4 rounded-2xl flex items-center gap-4 transition-all">
-                <div className="p-3 bg-amber-100 text-amber-600 rounded-xl">
+              <div className="bg-amber-50/50 dark:bg-slate-950 border border-amber-200 dark:border-slate-800 p-4 rounded-2xl flex items-center gap-3 sm:gap-4 transition-all">
+                <div className="p-3 bg-amber-100 text-amber-600 rounded-xl shrink-0">
                   <Coins className="w-5 h-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600/80">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-600/80 truncate">
                     Total Cash Bond
                   </p>
-                  <p className="text-lg font-black text-amber-700">
+                  <p
+                    className="text-base lg:text-lg font-black text-amber-700 truncate"
+                    title={formatMoney(grandTotalCashBond)}
+                  >
                     {formatMoney(grandTotalCashBond)}
                   </p>
                 </div>
               </div>
-              <div className="bg-emerald-50/50 dark:bg-slate-950 border border-emerald-200 dark:border-slate-800 p-4 rounded-2xl flex items-center gap-4 transition-all">
-                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
+
+              <div className="bg-emerald-50/50 dark:bg-slate-950 border border-emerald-200 dark:border-slate-800 p-4 rounded-2xl flex items-center gap-3 sm:gap-4 transition-all">
+                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl shrink-0">
                   <Wallet className="w-5 h-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80 ">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80 truncate">
                     Total Payment
                   </p>
-                  <p className="text-lg font-black text-emerald-700">
+                  <p
+                    className="text-base lg:text-lg font-black text-emerald-700 truncate"
+                    title={formatMoney(grandTotalPayment)}
+                  >
                     {formatMoney(grandTotalPayment)}
                   </p>
                 </div>
               </div>
-              <div className="bg-slate-100 dark:bg-slate-950 border border-border/50 p-4 rounded-2xl flex items-center gap-4 shadow-sm transition-all">
-                <div className="p-3 bg-white dark:bg-slate-500 border border-border/50 rounded-xl shadow-sm">
+
+              <div className="bg-slate-100 dark:bg-slate-950 border border-border/50 p-4 rounded-2xl flex items-center gap-3 sm:gap-4 shadow-sm transition-all">
+                <div className="p-3 bg-white dark:bg-slate-500 border border-border/50 rounded-xl shadow-sm shrink-0">
                   <Receipt className="w-5 h-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground truncate">
                     Actual Receipt
                   </p>
-                  <p className="text-lg font-black text-foreground">
+                  <p
+                    className="text-base lg:text-lg font-black text-foreground truncate"
+                    title={formatMoney(grandTotalReceipt)}
+                  >
                     {formatMoney(grandTotalReceipt)}
                   </p>
                 </div>
