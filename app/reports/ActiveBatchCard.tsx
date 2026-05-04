@@ -81,6 +81,11 @@ export default function ActiveBatchCard({ report }: { report: any }) {
 
     doc.text(`Current Age: ${report.ageInDays} Days`, 220, 50);
 
+    const totalFeedsSacks = (report.pdfPayload.feeds || []).reduce(
+      (sum: number, f: any) => sum + Number(f.qty || 0),
+      0,
+    );
+
     // 1. EXECUTIVE SUMMARY TABLE
     autoTable(doc, {
       startY: 55,
@@ -116,6 +121,16 @@ export default function ActiveBatchCard({ report }: { report: any }) {
           `${report.percentHarvest.toFixed(1)}%`,
           "Current Cost/Chick",
           formatMoneyPDF(report.actualCostPerChick),
+        ],
+        [
+          "Total Feeds (Sacks)",
+          totalFeedsSacks.toLocaleString(undefined, {
+            maximumFractionDigits: 2,
+          }),
+          "Total Net Sales",
+          report.actualHarvest === 0
+            ? "PENDING"
+            : formatMoneyPDF(report.totalNetSales),
         ],
       ],
       theme: "grid",
