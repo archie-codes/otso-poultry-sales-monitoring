@@ -94,7 +94,7 @@ export default function ActiveBatchCard({ report }: { report: any }) {
       ],
       body: [
         [
-          "Total Initial Sacks",
+          "Actual Qty Load",
           report.quantity.toLocaleString(),
           "Total Gross Cost",
           formatMoneyPDF(report.totalGrossCost),
