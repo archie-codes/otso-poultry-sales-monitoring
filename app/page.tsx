@@ -447,7 +447,7 @@ export default async function Dashboard() {
                   <div className="p-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400 rounded-xl">
                     <MapPin className="h-5 w-5" />
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-black tracking-tighter uppercase text-foreground">
+                  <h3 className="text-lg sm:text-xl font-black tracking-tighter uppercase text-foreground">
                     {farmName}
                   </h3>
                 </div>
@@ -490,7 +490,7 @@ export default async function Dashboard() {
                     <div className="p-5 flex-1">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <h4 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
+                          <h4 className="text-md font-black tracking-tight text-foreground flex items-center gap-2">
                             <Warehouse
                               className={cn(
                                 "w-4 h-4",
